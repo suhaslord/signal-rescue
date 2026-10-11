@@ -71,9 +71,15 @@ function render() {
 
   const failed = network.towers.filter(tower => !tower.active).length;
   const restored = current.connected - outage.connected;
-  element('status').textContent = strategy === 'none'
-    ? `${current.connected} connected; ${network.users.length - current.connected} disconnected. ${failed} towers off.`
-    : `${strategyNames[strategy]}: ${restored} connections restored; ${network.users.length - current.connected} still disconnected.`;
+  const remaining = [];
+  if (current.outOfRange) remaining.push(`${current.outOfRange} out of range`);
+  if (current.congested) remaining.push(`${current.congested} waiting for a free slot`);
+  let message = strategy === 'none'
+    ? `${current.connected} connected. ${failed} ${failed === 1 ? 'tower' : 'towers'} off.`
+    : `${restored} reconnected. ${current.connected} connected in total.`;
+  if (remaining.length) message += ` ${remaining.join('; ')}.`;
+  if (failed === network.towers.length) message = 'All towers are off. Even the best algorithm needs a tower.';
+  element('status').textContent = message;
   element('export').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(resultsCsv(network, extension));
   drawMap();
 }
@@ -92,8 +98,12 @@ function drawMap() {
 
   const users = network.users.map(user => {
     const assigned = current.assignments[user.id];
-    return `<circle cx="${user.x}" cy="${user.y}" r="3" fill="${assigned >= 0 ? '#176b38' : '#bd2424'}">
-      <title>User ${user.id + 1}: ${assigned >= 0 ? towerName(assigned) : 'disconnected'}</title></circle>`;
+    const reachable = network.towers.some(tower => tower.active &&
+      Math.hypot(user.x - tower.x, user.y - tower.y) <= tower.range * current.multiplier);
+    const description = assigned >= 0 ? `connected to ${towerName(assigned)}`
+      : reachable ? 'waiting for a free tower slot' : 'no active tower within range';
+    return `<circle class="user-dot" cx="${user.x}" cy="${user.y}" r="3" fill="${assigned >= 0 ? '#176b38' : '#bd2424'}">
+      <title>User ${user.id + 1}: ${description}</title></circle>`;
   }).join('');
 
   const towers = network.towers.map(tower => {
@@ -103,6 +113,7 @@ function drawMap() {
       : `<path d="M${x - 9} ${y - 10}l18 18m0-18l-18 18" stroke="#bd2424" stroke-width="3"/>`;
     return `<g class="tower" data-tower="${id}" tabindex="0" role="button"
       aria-label="${towerName(id)} on map" aria-pressed="${active}">
+      <title>${towerName(id)}: ${active ? `${current.loads[id]} of ${tower.capacity} slots used. Click to switch off.` : 'off. Click to bring it back.'}</title>
       <rect x="${x - 19}" y="${y - 20}" width="38" height="45" fill="white"/>
       ${symbol}<text x="${x}" y="${y + 21}" text-anchor="middle" font-size="14">${towerName(id)}</text></g>`;
   }).join('');

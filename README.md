@@ -6,7 +6,7 @@ Serve the project directory with a static web server. Run model checks with `npm
 
 ## Model
 
-Deterministic synthetic users and five towers. Nearest available tower association subject to geometric range and capacity. Recovery compares constrained-first load balancing and a 35% range extension. An unchanged baseline is retained when recovery cannot improve the connected count. Range cost is a squared-radius proxy, not measured electricity or calibrated RF power.
+Deterministic synthetic users and five towers. Outage association uses nearest-first assignment with geometric range and capacity limits. Reassignment uses augmenting paths for maximum-cardinality capacitated matching. Range extension is adjustable from 0% to 100%. All runs remain subject to physical reach and tower capacity. Settings preserve outages; reset restores the original scenario. CSV exports the computed comparison results.
 
 This model does not implement 5G protocol stacks, propagation, interference, terrain, or real carrier data. It uses original standalone code rather than university lab code.
 

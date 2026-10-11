@@ -1,41 +1,46 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Signal Rescue</title><link rel="stylesheet" href="style.css"></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Signal Rescue</title>
+  <link rel="stylesheet" href="style.css">
+</head>
 <body>
 <main>
-  <header><a class="mark" href="./" aria-label="Signal Rescue home">S</a><strong>Signal Rescue</strong><nav><a href="#network">network</a> | <a href="#results">results</a> | <a href="#method">how it works</a></nav><span class="version">network simulator</span></header>
-  <div class="layout">
-    <aside>
-      <h1>signal rescue</h1>
-      <p class="sub">cellular network sandbox</p>
-      <h2>scenario</h2>
-      <label for="scenario">Layout</label><select id="scenario"><option value="town">Town center</option><option value="rural">Rural corridor</option><option value="crowd">Crowded neighborhood</option></select>
-      <label for="population">Users <output id="population-value">180</output></label><input id="population" type="range" min="60" max="360" step="30" value="180">
-      <label for="capacity">Capacity / tower <output id="capacity-value">55</output></label><input id="capacity" type="range" min="20" max="100" step="5" value="55">
-      <h2>towers</h2><div id="tower-controls"></div>
-      <p><button id="restore">restore all towers</button></p>
-      <h2>recovery</h2>
-      <label for="strategy">Strategy</label><select id="strategy"><option value="balanced">Balance connections</option><option value="boost">Extend range</option><option value="combined">Range + balancing</option></select>
-      <button id="recover" class="run">run recovery</button>
-      <button id="reset">reset scenario</button>
-    </aside>
-    <article>
-      <section id="network">
-        <div class="section-title"><h2>Network</h2><label><input id="links" type="checkbox"> show connections</label></div>
-        <p class="hint">Click a tower to switch it on or off.</p>
-        <svg id="map" viewBox="0 0 800 440" aria-label="Interactive cellular network map"></svg>
-        <div class="legend"><span><i class="connected"></i> connected user</span><span><i class="offline"></i> disconnected user</span><span>△ active tower</span><span>× failed tower</span></div>
-        <p id="status" role="status" aria-live="polite"></p>
-      </section>
-      <section id="results">
-        <div class="section-title"><h2>Results</h2><button id="export">download CSV</button></div>
-        <table><thead><tr><th>Measure</th><th>Healthy</th><th>After outage</th><th>After recovery</th></tr></thead><tbody id="metrics"></tbody></table>
-        <h3>Tower load</h3><div id="loads"></div>
-        <details><summary>Compare all strategies</summary><table><thead><tr><th>Strategy</th><th>Connected</th><th>Coverage</th><th>Range cost¹</th></tr></thead><tbody id="comparison"></tbody></table></details>
-      </section>
-      <section id="method"><details><summary>How it works</summary><p>A repeatable, synthetic map. Each user connects to a tower within range, subject to its capacity. The outage model chooses the nearest available tower. Balancing places users with fewer tower choices first. Range extension increases active towers’ reach by 35%; combined recovery tries both assignment methods and keeps the better result.</p><p>¹ Range cost is a relative proxy: sum of squared range multipliers, compared with the active network. No terrain, interference, handover timing, or real carrier data is modeled.</p><p>Runs entirely in your browser. An educational simulation, not a live coverage map.</p></details></section>
-    </article>
-  </div>
-  <footer>Signal Rescue · <a href="https://github.com/suhaslord/signal-rescue">source</a></footer>
-</main><script type="module" src="app.js"></script>
-</body></html>
+  <header>
+    <h1>Signal Rescue</h1>
+    <nav><a href="#network">network</a> &middot; <a href="#results">results</a> &middot; <a href="#method">method</a> &middot; <a href="https://github.com/suhaslord/signal-rescue">source</a></nav>
+  </header>
+  <hr>
+  <form id="settings">
+    <label>Layout <select id="scenario"><option value="town">Town</option><option value="rural">Rural</option><option value="crowd">Crowded</option></select></label>
+    <label>Users <input id="population" type="number" min="20" max="500" step="10" value="180" required></label>
+    <label>Capacity / tower <input id="capacity" type="number" min="1" max="200" value="40" required></label>
+    <button type="submit">apply</button>
+    <button id="reset-scenario" type="button">reset</button>
+  </form>
+  <section id="network">
+    <div class="network">
+      <div>
+        <p class="map-tools"><button id="example">fail center tower</button> <button id="restore">restore all</button> <label><input id="links" type="checkbox"> connections</label> <label><input id="ranges" type="checkbox"> ranges</label></p>
+        <svg id="map" role="group" viewBox="0 0 800 440" aria-label="Network map; select a tower to toggle it"></svg>
+        <p class="legend"><span class="green">●</span> connected &nbsp; <span class="red">●</span> disconnected &nbsp; △ tower &nbsp; × outage</p>
+      </div>
+      <table class="towers"><caption>Towers</caption><thead><tr><th>Tower</th><th>Status</th><th>Load</th></tr></thead><tbody id="tower-controls"></tbody></table>
+    </div>
+    <p class="recovery"><b>Recover:</b> <button data-strategy="balanced">reassign users</button> <button data-strategy="boost">extend range</button> <button data-strategy="combined">both</button> <button data-strategy="none">clear</button></p>
+    <p><label>Range extension <input id="boost" type="range" min="0" max="100" step="5" value="35"> <output id="boost-value">35%</output></label></p>
+    <p id="status" role="status" aria-live="polite"></p>
+  </section>
+  <section id="results">
+    <h2>Results <a id="export" href="#" download="signal-rescue-results.csv">download csv</a></h2>
+    <table><thead><tr><th></th><th>All towers on</th><th>Outage</th><th id="recovery-heading">Recovery</th></tr></thead><tbody id="metrics"></tbody></table>
+    <details><summary>compare strategies</summary><table><thead><tr><th>Strategy</th><th>Connected</th><th>Coverage</th><th>Range</th></tr></thead><tbody id="comparison"></tbody></table></details>
+  </section>
+  <hr>
+  <details id="method"><summary>method</summary><p>Dots are simulated users. A user needs a tower within range and a free capacity slot. The outage uses nearest-first assignment. Reassignment searches for a maximum matching: it moves existing connections when necessary to make room for another user. Range extension enlarges tower reach by the selected percentage; “both” also reassigns users.</p><p>Capacity and range are hard limits. Recovery cannot create coverage when every tower is off. Layouts are repeatable; changing user count or capacity keeps your tower outages. This geometric model does not include interference, terrain, or actual 5G radio protocols.</p><p>Everything runs locally in your browser. No real coverage data is used.</p></details>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

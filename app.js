@@ -1,61 +1,159 @@
-import {makeNetwork,assignUsers,recoverNetwork} from './model.js';
+import {makeNetwork, assignUsers, recoverNetwork, resultsCsv} from './model.js';
 
-const $ = id => document.getElementById(id);
-let network, current, recovered = false;
-const percent = n => `${Math.round(n/network.users.length*100)}%`;
-const name = id => `T${id+1}`;
+const element = id => document.getElementById(id);
+const towerName = id => `T${id + 1}`;
+const strategyNames = {
+  none: 'No recovery', balanced: 'Reassignment',
+  boost: 'Range extension', combined: 'Both'
+};
+let network = makeNetwork();
+let strategy = 'none';
+let current;
 
-function start() {
-  network = makeNetwork($('scenario').value,Number($('population').value),Number($('capacity').value));
-  $('population-value').value = $('population').value;
-  $('capacity-value').value = $('capacity').value;
-  recovered = false;
+function coverage(result) {
+  return `${(100 * result.connected / network.users.length).toFixed(1)}%`;
+}
+
+function updateSettings() {
+  if (!element('settings').reportValidity()) return;
+  const previous = network.towers.map(tower => tower.active);
+  network = makeNetwork(
+    element('scenario').value,
+    Number(element('population').value),
+    Number(element('capacity').value)
+  );
+  network.towers.forEach((tower, id) => tower.active = previous[id]);
   render();
 }
 
-function toggle(id) {
+function toggleTower(id) {
   network.towers[id].active = !network.towers[id].active;
-  recovered = false;
   render();
 }
 
 function render() {
-  const healthy = assignUsers({...network,towers:network.towers.map(t=>({...t,active:true}))});
+  const extension = Number(element('boost').value);
+  const healthy = assignUsers({
+    ...network, towers: network.towers.map(tower => ({...tower, active: true}))
+  });
   const outage = assignUsers(network);
-  current = recovered ? recoverNetwork(network,$('strategy').value) : outage;
-  $('tower-controls').innerHTML = network.towers.map(t=>`<div class="tower-row"><span>${name(t.id)}</span><button data-id="${t.id}" aria-label="Toggle tower ${name(t.id)}" aria-pressed="${t.active}">${t.active?'on':'off'}</button></div>`).join('');
-  $('tower-controls').querySelectorAll('button').forEach(button=>button.onclick=()=>toggle(Number(button.dataset.id)));
+  current = recoverNetwork(network, strategy, extension);
+  element('boost-value').value = `${extension}%`;
+  element('recovery-heading').textContent = strategy === 'none' ? 'Recovery' : strategyNames[strategy];
+
+  const metrics = [
+    ['Connected', result => `${result.connected} / ${network.users.length}`],
+    ['Coverage', coverage],
+    ['Out of range', result => result.outOfRange],
+    ['Capacity blocked', result => result.congested]
+  ];
+  element('metrics').innerHTML = metrics.map(([label, value]) => `
+    <tr><td>${label}</td><td>${value(healthy)}</td><td>${value(outage)}</td>
+    <td>${strategy === 'none' ? '—' : value(current)}</td></tr>`).join('');
+
+  element('tower-controls').innerHTML = network.towers.map(tower => `
+    <tr><td>${towerName(tower.id)}</td><td>
+    <button data-tower="${tower.id}" aria-label="Toggle tower ${towerName(tower.id)}"
+      aria-pressed="${tower.active}">${tower.active ? 'on' : 'off'}</button>
+    </td><td>${current.loads[tower.id]} / ${tower.capacity}</td></tr>`).join('');
+  element('tower-controls').querySelectorAll('button').forEach(button => {
+    button.onclick = () => toggleTower(Number(button.dataset.tower));
+  });
+
+  element('comparison').innerHTML = ['balanced', 'boost', 'combined'].map(key => {
+    const result = recoverNetwork(network, key, extension);
+    return `<tr><td>${strategyNames[key]}</td><td>${result.connected}</td>
+      <td>${coverage(result)}</td><td>${result.multiplier.toFixed(2)}×</td></tr>`;
+  }).join('');
+  document.querySelectorAll('[data-strategy]').forEach(button => {
+    button.setAttribute('aria-pressed', button.dataset.strategy === strategy);
+  });
+
+  const failed = network.towers.filter(tower => !tower.active).length;
+  const restored = current.connected - outage.connected;
+  element('status').textContent = strategy === 'none'
+    ? `${current.connected} connected; ${network.users.length - current.connected} disconnected. ${failed} towers off.`
+    : `${strategyNames[strategy]}: ${restored} connections restored; ${network.users.length - current.connected} still disconnected.`;
+  element('export').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(resultsCsv(network, extension));
   drawMap();
-  const rows = [['Connected users',r=>r.connected],['Coverage',r=>percent(r.connected)],['Out of range',r=>r.outOfRange],['At capacity',r=>r.congested]];
-  $('metrics').innerHTML = rows.map(([label,value])=>`<tr><td>${label}</td><td>${value(healthy)}</td><td>${value(outage)}</td><td>${recovered?value(current):'—'}</td></tr>`).join('');
-  $('loads').innerHTML = network.towers.map(t=>`<div><div class="load-label"><span>${name(t.id)}</span><span>${t.active?`${current.loads[t.id]}/${t.capacity}`:'off'}</span></div><div class="bar"><div style="width:${current.loads[t.id]/t.capacity*100}%"></div></div></div>`).join('');
-  const strategies = [['balanced','Balance connections'],['boost','Extend range'],['combined','Range + balancing']];
-  const activeCount = network.towers.filter(t=>t.active).length;
-  $('comparison').innerHTML = strategies.map(([key,label])=>{const r=recoverNetwork(network,key);return `<tr><td>${label}</td><td>${r.connected}</td><td>${percent(r.connected)}</td><td>${activeCount?(r.cost/activeCount).toFixed(2):'—'}×</td></tr>`;}).join('');
-  $('status').textContent = recovered ? `${current.connected-outage.connected} connections restored · ${current.connected} of ${network.users.length} users connected` : `${current.connected} of ${network.users.length} users connected · ${network.towers.filter(t=>!t.active).length} towers offline`;
 }
 
 function drawMap() {
-  const grid = Array.from({length:9},(_,i)=>`<path d="M ${i*100} 0 V 440" stroke="#f0f0eb"/>`).join('')+Array.from({length:5},(_,i)=>`<path d="M 0 ${i*100} H 800" stroke="#f0f0eb"/>`).join('');
-  const circles = network.towers.filter(t=>t.active).map(t=>`<circle cx="${t.x}" cy="${t.y}" r="${t.range*current.multiplier}" fill="#719881" fill-opacity=".025" stroke="#bbb" stroke-dasharray="3 4"/>`).join('');
-  const lines = $('links').checked ? network.users.map(u=>{const t=network.towers[current.assignments[u.id]];return t?`<path d="M${u.x} ${u.y}L${t.x} ${t.y}" stroke="#457451" stroke-opacity=".16"/>`:'';}).join('') : '';
-  const users = network.users.map(u=>`<circle cx="${u.x}" cy="${u.y}" r="3" fill="${current.assignments[u.id]>=0?'#457451':'#c5392b'}"><title>User ${u.id+1}: ${current.assignments[u.id]>=0?name(current.assignments[u.id]):'disconnected'}</title></circle>`).join('');
-  const towers = network.towers.map(t=>`<g class="tower" data-id="${t.id}" tabindex="0" role="button" aria-label="${name(t.id)}, ${t.active?'active':'offline'}. Toggle tower." aria-pressed="${t.active}"><title>${name(t.id)} · ${t.active?'active':'offline'}</title><rect x="${t.x-18}" y="${t.y-20}" width="36" height="42" fill="#fff" fill-opacity=".85"/>${t.active?`<polygon points="${t.x},${t.y-14} ${t.x-10},${t.y+7} ${t.x+10},${t.y+7}" fill="#555"/>`:`<path d="M${t.x-9} ${t.y-10}l18 18m0-18l-18 18" stroke="#b43128" stroke-width="3"/>`}<text x="${t.x}" y="${t.y+20}" text-anchor="middle" font-size="11" font-family="Verdana">${name(t.id)}</text></g>`).join('');
-  $('map').innerHTML = grid+circles+lines+users+towers;
-  $('map').querySelectorAll('.tower').forEach(el=>{el.onclick=()=>toggle(Number(el.dataset.id));el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle(Number(el.dataset.id));}};});
+  const ranges = element('ranges').checked ? network.towers
+    .filter(tower => tower.active)
+    .map(tower => `<circle cx="${tower.x}" cy="${tower.y}" r="${tower.range * current.multiplier}"
+      fill="none" stroke="#bbb" stroke-dasharray="4 4"/>`).join('') : '';
+
+  const lines = element('links').checked ? network.users.map(user => {
+    const tower = network.towers[current.assignments[user.id]];
+    if (!tower) return '';
+    return `<path d="M${user.x} ${user.y}L${tower.x} ${tower.y}" stroke="#aaa" stroke-opacity=".4"/>`;
+  }).join('') : '';
+
+  const users = network.users.map(user => {
+    const assigned = current.assignments[user.id];
+    return `<circle cx="${user.x}" cy="${user.y}" r="3" fill="${assigned >= 0 ? '#176b38' : '#bd2424'}">
+      <title>User ${user.id + 1}: ${assigned >= 0 ? towerName(assigned) : 'disconnected'}</title></circle>`;
+  }).join('');
+
+  const towers = network.towers.map(tower => {
+    const {x, y, id, active} = tower;
+    const symbol = active
+      ? `<polygon points="${x},${y - 14} ${x - 10},${y + 6} ${x + 10},${y + 6}" fill="#222"/>`
+      : `<path d="M${x - 9} ${y - 10}l18 18m0-18l-18 18" stroke="#bd2424" stroke-width="3"/>`;
+    return `<g class="tower" data-tower="${id}" tabindex="0" role="button"
+      aria-label="${towerName(id)} on map" aria-pressed="${active}">
+      <rect x="${x - 19}" y="${y - 20}" width="38" height="45" fill="white"/>
+      ${symbol}<text x="${x}" y="${y + 21}" text-anchor="middle" font-size="14">${towerName(id)}</text></g>`;
+  }).join('');
+
+  element('map').innerHTML = ranges + lines + users + towers;
+  element('map').querySelectorAll('.tower').forEach(tower => {
+    tower.onclick = () => toggleTower(Number(tower.dataset.tower));
+    tower.onkeydown = event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        const id = Number(tower.dataset.tower);
+        toggleTower(id);
+        element('map').querySelector(`[data-tower="${id}"]`).focus();
+      }
+    };
+  });
 }
 
-['scenario','population','capacity'].forEach(id=>$(id).addEventListener('change',start));
-$('links').onchange=drawMap;
-$('strategy').onchange=()=>{recovered=false;render();};
-$('recover').onclick=()=>{recovered=true;render();};
-$('restore').onclick=()=>{network.towers.forEach(t=>t.active=true);recovered=false;render();};
-$('reset').onclick=start;
-$('export').onclick=()=>{
-  const outage=assignUsers(network);
-  const rows=[['strategy','connected','users','out_of_range','capacity_blocked','range_multiplier','range_cost'],['outage',outage.connected,network.users.length,outage.outOfRange,outage.congested,outage.multiplier,outage.cost]];
-  for(const strategy of ['balanced','boost','combined']) {const r=recoverNetwork(network,strategy);rows.push([strategy,r.connected,network.users.length,r.outOfRange,r.congested,r.multiplier,r.cost]);}
-  const url=URL.createObjectURL(new Blob([rows.map(row=>row.join(',')).join('\n')],{type:'text/csv'}));
-  const link=document.createElement('a');link.href=url;link.download='signal-rescue-results.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+element('settings').onsubmit = event => {
+  event.preventDefault();
+  updateSettings();
 };
-start();
+element('scenario').onchange = updateSettings;
+element('population').onchange = updateSettings;
+element('capacity').onchange = updateSettings;
+element('links').onchange = drawMap;
+element('ranges').onchange = drawMap;
+element('boost').oninput = render;
+element('example').onclick = () => {
+  network.towers.forEach(tower => tower.active = tower.id !== 2);
+  strategy = 'none';
+  render();
+};
+element('restore').onclick = () => {
+  network.towers.forEach(tower => tower.active = true);
+  strategy = 'none';
+  render();
+};
+element('reset-scenario').onclick = () => {
+  element('settings').reset();
+  element('boost').value = 35;
+  element('links').checked = false;
+  element('ranges').checked = false;
+  network = makeNetwork();
+  strategy = 'none';
+  render();
+};
+document.querySelectorAll('[data-strategy]').forEach(button => {
+  button.onclick = () => {
+    strategy = button.dataset.strategy;
+    render();
+  };
+});
+render();

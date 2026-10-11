@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/tiles.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{*.test.js,build-data.py,DATA.md,README.md}"
+    }
+  }
+}

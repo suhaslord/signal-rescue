@@ -12,3 +12,11 @@ The adapted dataset remains CC BY-NC-SA 4.0. No endorsement by Ookla is implied.
 Leaflet 1.9.4 is bundled under its BSD 2-Clause license (Leaflet-License.txt). Basemap tiles are requested from OpenStreetMap on demand and credited on the map. No bulk tile downloads or prefetching.
 
 The simulation is independent: assumed users, tower locations, capacities, ranges and battery durations. It does not calibrate coverage from speed measurements.
+
+## Detail anywhere
+
+At zoom 5 and above, `/api/tiles` reads the chosen visible area from the same public mobile Parquet datasets. The server groups tiles at progressively finer quadkey levels (7–16). Zoom 12 and above uses the original zoom-16 measurements. Values remain test-weighted; device counts appear only for original tiles. This covers anywhere with published measurements, not every location on Earth.
+
+Bounds are rounded outward for caching, so counts can include measurements just outside the screen. Regions at the edge of the requested area average only the tiles retrieved in that request. The first query may take several seconds; browser and CDN caches speed up repeated views. Empty results and source failures are shown separately. No tower data is inferred.
+
+Install `requirements.txt` to run the Python data service. `python api_test.py` checks request validation and map projection; `npm test` checks measurement math and simulation.

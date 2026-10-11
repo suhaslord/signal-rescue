@@ -6,10 +6,11 @@ import {
 } from './measurement-model.js';
 
 const get = (id) => document.getElementById(id);
+const colors = { slow: '#b54a36', middle: '#b99547', fast: '#547b71', small: '#b4b5ae' };
 const map = L.map('measurement-map', {
   scrollWheelZoom: false,
-  worldCopyJump: false,
   minZoom: 1,
+  maxZoom: 18,
   zoomSnap: 0.25
 });
 map.fitBounds([
@@ -26,148 +27,289 @@ map.attributionControl.addAttribution(
   '<a href="https://github.com/teamookla/ookla-open-data">Speedtest by Ookla</a>'
 );
 const cells = L.layerGroup().addTo(map);
-let data;
-let selected;
-let previousArea;
+let data,
+  records = [],
+  level = 6,
+  loadedQuery,
+  selected;
+let requestNumber = 0,
+  debounce,
+  loading = false;
+const cache = new Map();
 
-function describe(record) {
-  const detail = `${record.lat.toFixed(3)}, ${record.lon.toFixed(3)} · Download ${metricValue(record, 'down')?.toFixed(1) ?? '—'} Mbps · Upload ${metricValue(record, 'up')?.toFixed(1) ?? '—'} Mbps · Latency ${metricValue(record, 'latency')?.toFixed(1) ?? '—'} ms · ${record.tests.toLocaleString()} tests`;
-  return (
-    detail +
-    (record.region === 'world'
-      ? ` across ${record.tiles.toLocaleString()} measured tiles.`
-      : `, ${record.devices} devices.`)
-  );
+function viewQuery(period = get('measurement-quarter').value) {
+  const b = map.getBounds();
+  const level = Math.min(16, Math.floor(map.getZoom()) + 4);
+  // Round bounds outward so small movements can reuse a cached response.
+  const step = 360 / 2 ** level;
+  const floor = (v) => Math.floor(v / step) * step;
+  const ceil = (v) => Math.ceil(v / step) * step;
+  const bounds = [
+    Math.max(-180, floor(b.getWest())),
+    Math.max(-85.1, floor(b.getSouth())),
+    Math.min(180, ceil(b.getEast())),
+    Math.min(85.1, ceil(b.getNorth()))
+  ];
+  return {
+    period,
+    level,
+    bounds,
+    url:
+      '/api/tiles?' +
+      new URLSearchParams({ period, level, bbox: bounds.map((v) => v.toFixed(6)).join(',') })
+  };
 }
-
-function renderMeasurements() {
-  if (!data || !get('measurement-settings').reportValidity()) return;
-  const region = data.regions.find((region) => region.id === get('measurement-area').value);
-  const period = get('measurement-quarter').value;
+async function queryData(query) {
+  if (cache.has(query.url)) return cache.get(query.url);
+  const response = await fetch(query.url);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Measurements did not load.');
+  cache.set(query.url, result);
+  if (cache.size > 30) cache.delete(cache.keys().next().value);
+  return result;
+}
+function detail(record) {
   const metric = get('measurement-metric').value;
   const unit = metric === 'latency' ? 'ms' : 'Mbps';
-  const minimum = Number(get('measurement-min-tests').value);
+  const value = metricValue(record, metric);
+  return `<strong>${value?.toFixed(1) ?? '—'} ${unit}</strong><br>Download ${metricValue(record, 'down')?.toFixed(1)} Mbps<br>Upload ${metricValue(record, 'up')?.toFixed(1)} Mbps<br>Delay ${metricValue(record, 'latency')?.toFixed(1)} ms<br>${record.tests.toLocaleString()} tests${record.devices ? ' · ' + record.devices + ' devices' : ''}<br>${record.lat.toFixed(3)}, ${record.lon.toFixed(3)}`;
+}
+function paint() {
+  if (loading || !get('measurement-filters').reportValidity()) return;
+  const metric = get('measurement-metric').value;
+  const delay = metric === 'latency';
   const threshold = Number(get('measurement-threshold').value);
+  const minimum = Number(get('measurement-min-tests').value);
+  const unit = delay ? 'ms' : 'Mbps';
   get('threshold-unit').textContent = unit;
-  get('threshold-direction').textContent = metric === 'latency' ? 'Flag above' : 'Flag below';
-  const records = data.records.filter(
-    (record) => record.region === region.id && record.period === period
-  );
+  get('threshold-direction').textContent = delay ? 'Slow above' : 'Slow below';
   const summary = measurementSummary(records, metric, minimum, threshold);
   get('measurement-summary').textContent = summary.tiles
-    ? `${summary.tiles.toLocaleString()} qualifying cells · ${summary.tests.toLocaleString()} tests · ${summary.flagged.toLocaleString()} flagged. Test-weighted average: ${summary.average.toFixed(1)} ${unit}.`
-    : 'No qualifying measurements. Lower the minimum test count or choose another quarter.';
+    ? `${summary.flagged.toLocaleString()} of ${summary.tiles.toLocaleString()} measured areas ${delay ? 'above' : 'below'} ${threshold} ${unit}.`
+    : records.length
+      ? 'No cells meet your sample filter. Lower it to see more.'
+      : 'No mobile measurements here for this quarter.';
+  const ranges = delay
+    ? [`over ${threshold} ms`, `${threshold / 2}–${threshold} ms`, `up to ${threshold / 2} ms`]
+    : [`under ${threshold / 2} Mbps`, `${threshold / 2}–${threshold} Mbps`, `${threshold}+ Mbps`];
+  get('measurement-scale').innerHTML =
+    ['slow', 'middle', 'fast']
+      .map(
+        (key, i) =>
+          `<span class="key"><span class="swatch" style="background:${colors[key]}"></span>${ranges[i]}</span>`
+      )
+      .join('') + '<span class="key">blank: no data</span>';
   get('measurement-resolution').textContent =
-    region.id === 'world'
-      ? 'World: regional averages, cells about 626 km wide at the equator. Choose Chittamur or Lathrop for detailed tiles.'
-      : 'Local: measured tiles about 610 m wide at the equator. These bounds include the surrounding area.';
-  if (previousArea !== region.id) {
-    selected = undefined;
-    map.closePopup();
-    const [w, s, e, n] = region.bounds;
-    if (region.id === 'world')
-      map.fitBounds([
-        [-60, -180],
-        [75, 180]
-      ]);
-    else
-      map.fitBounds(
-        [
-          [s, w],
-          [n, e]
-        ],
-        { padding: [10, 10] }
-      );
-    previousArea = region.id;
-  }
+    level === 16
+      ? 'Detailed tiles · about 610 m at the equator. Click a tile for its tests.'
+      : `Regional averages · about ${Math.round(40075 / 2 ** level)} km at the equator. Zoom in for more detail.`;
   cells.clearLayers();
-  let chosen;
+  get('measurement-detail').hidden = true;
   for (const record of records) {
     const value = metricValue(record, metric);
     const small = record.tests < minimum || value === null;
-    const flagged = metric === 'latency' ? value > threshold : value < threshold;
-    const color = small ? '#b6b5ae' : flagged ? '#b64c37' : '#527449';
+    if (small) continue;
+    const bucket = delay
+      ? value > threshold
+        ? 'slow'
+        : value > threshold / 2
+          ? 'middle'
+          : 'fast'
+      : value < threshold / 2
+        ? 'slow'
+        : value < threshold
+          ? 'middle'
+          : 'fast';
     const [w, s, e, n] = record.bounds;
     const cell = L.rectangle(
       [
         [s, w],
         [n, e]
       ],
-      {
-        color: record.quadkey === selected ? '#000080' : color,
-        weight: record.quadkey === selected ? 2 : 0.5,
-        fillColor: color,
-        fillOpacity: region.id === 'world' ? 0.55 : 0.7
-      }
+      { weight: 0, fillColor: colors[bucket], fillOpacity: level < 12 ? 0.5 : 0.72 }
     ).addTo(cells);
-    cell.bindTooltip(
-      `${value === null ? 'No value' : value.toFixed(1) + ' ' + unit} · ${record.tests.toLocaleString()} tests`
-    );
+    cell.bindTooltip(`${value.toFixed(1)} ${unit} · ${record.tests.toLocaleString()} tests`);
     const select = () => {
       selected = record.quadkey;
-      get('measurement-detail').textContent =
-        describe(record) + (small ? ' Below sample minimum.' : '');
-      cell.bindPopup(describe(record)).openPopup();
+      cell
+        .bindPopup(
+          detail(record) + (level < 16 ? '<br><button class=look-closer>look closer</button>' : ''),
+          { autoPan: false }
+        )
+        .openPopup();
     };
     cell.on('click', select);
     const path = cell.getElement();
     path.setAttribute('tabindex', '0');
     path.setAttribute('role', 'button');
-    path.setAttribute('aria-label', describe(record));
+    path.setAttribute(
+      'aria-label',
+      `${value.toFixed(1)} ${unit}, ${record.tests} tests, ${record.lat.toFixed(3)}, ${record.lon.toFixed(3)}`
+    );
     path.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         select();
       }
     });
-    if (record.quadkey === selected) chosen = record;
   }
-  get('measurement-detail').textContent = chosen
-    ? describe(chosen)
-    : 'Click a measured cell for its sample counts and values. Drag to explore; use + / − to zoom.';
-  const periods = data.periods.map((period) => period.id);
-  const previous = data.records.filter(
-    (record) => record.region === region.id && record.period === periods[0]
-  );
-  const current = data.records.filter(
-    (record) => record.region === region.id && record.period === periods[1]
-  );
-  const comparison = compareMeasurements(previous, current, metric, minimum);
-  get('measurement-comparison').textContent = comparison.matched
-    ? `${periods[0]} → ${periods[1]}: ${comparison.matched.toLocaleString()} matched cells; median change ${comparison.medianChange >= 0 ? '+' : ''}${comparison.medianChange.toFixed(1)} ${unit}. Same areas, not necessarily the same devices. Changes do not establish an outage or its cause.`
-    : 'No cells with enough tests in both quarters.';
-  get('measurement-periods').textContent = periods.join(' / ');
   get('measurement-export').href =
     'data:text/csv;charset=utf-8,' + encodeURIComponent(measurementsCsv(records));
 }
-
-get('measurement-settings').onsubmit = (event) => {
-  event.preventDefault();
-  renderMeasurements();
-};
-for (const id of [
-  'measurement-area',
-  'measurement-quarter',
-  'measurement-min-tests',
-  'measurement-threshold'
-]) {
-  get(id).onchange = renderMeasurements;
+async function loadView() {
+  if (!data) return;
+  clearTimeout(debounce);
+  const version = ++requestNumber;
+  get('measurement-export').removeAttribute('href');
+  get('measurement-retry').hidden = true;
+  map.closePopup();
+  get('measurement-compare').open = false;
+  if (map.getZoom() < 5) {
+    records = data.records.filter(
+      (r) => r.region === 'world' && r.period === get('measurement-quarter').value
+    );
+    loading = false;
+    level = 6;
+    loadedQuery = null;
+    paint();
+    return;
+  }
+  loading = true;
+  records = [];
+  const query = viewQuery();
+  cells.clearLayers();
+  get('measurement-summary').textContent = 'Loading measurements for this area…';
+  get('measurement-resolution').textContent = 'The first request can take a little longer.';
+  try {
+    const result = await queryData(query);
+    if (version !== requestNumber) return;
+    loading = false;
+    records = result.records;
+    level = result.level;
+    loadedQuery = query;
+    paint();
+  } catch (error) {
+    if (version !== requestNumber) return;
+    loading = false;
+    records = [];
+    loadedQuery = null;
+    get('measurement-summary').textContent = 'Could not load this area. Try again.';
+    get('measurement-resolution').textContent = '';
+    get('measurement-retry').hidden = false;
+    console.warn('Area measurements unavailable', error.message);
+  }
 }
-get('measurement-metric').onchange = () => {
-  get('measurement-threshold').value = get('measurement-metric').value === 'latency' ? 100 : 10;
-  renderMeasurements();
+async function compare() {
+  if (!get('measurement-compare').open) return;
+  if (loading || !records.length) {
+    get('measurement-comparison').textContent = 'Load this area first.';
+    return;
+  }
+  const version = requestNumber;
+  const metric = get('measurement-metric').value;
+  const minimum = Number(get('measurement-min-tests').value);
+  get('measurement-comparison').textContent = 'Loading the other quarter…';
+  try {
+    const periods = data.periods.map((p) => p.id);
+    let before, after;
+    if (loadedQuery) {
+      const other = { ...loadedQuery, period: periods.find((p) => p !== loadedQuery.period) };
+      other.url =
+        '/api/tiles?' +
+        new URLSearchParams({
+          period: other.period,
+          level: other.level,
+          bbox: other.bounds.map((v) => v.toFixed(6)).join(',')
+        });
+      const result = await queryData(other);
+      before = loadedQuery.period === periods[0] ? records : result.records;
+      after = loadedQuery.period === periods[1] ? records : result.records;
+    } else {
+      before = data.records.filter((r) => r.region === 'world' && r.period === periods[0]);
+      after = data.records.filter((r) => r.region === 'world' && r.period === periods[1]);
+    }
+    if (version !== requestNumber) return;
+    const result = compareMeasurements(before, after, metric, minimum);
+    get('measurement-comparison').textContent = result.matched
+      ? `${periods[0]} → ${periods[1]}: median change ${result.medianChange >= 0 ? '+' : ''}${result.medianChange.toFixed(1)} ${metric === 'latency' ? 'ms' : 'Mbps'} across ${result.matched} matched cells. Different tests and devices; this doesn't prove an outage.`
+      : 'No matching cells with enough tests in both quarters.';
+  } catch {
+    get('measurement-comparison').textContent =
+      'The other quarter did not load. Close and reopen to retry.';
+  }
+}
+map.on('popupopen', (event) => {
+  const button = event.popup.getElement().querySelector('.look-closer');
+  if (button)
+    button.onclick = () => {
+      const point = event.popup.getLatLng();
+      map.closePopup();
+      map.setView(point, Math.min(14, map.getZoom() + 3));
+    };
+});
+map.on('movestart', () => {
+  if (!data) return;
+  requestNumber++;
+  loading = true;
+  records = [];
+  cells.clearLayers();
+  get('measurement-export').removeAttribute('href');
+  get('measurement-compare').open = false;
+  get('measurement-summary').textContent = 'Loading measurements for this area…';
+});
+map.on('moveend', () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(loadView, 500);
+});
+get('measurement-area').onchange = () => {
+  const region = data.regions.find((r) => r.id === get('measurement-area').value);
+  if (region.id === 'world')
+    map.fitBounds([
+      [-60, -180],
+      [75, 180]
+    ]);
+  else {
+    const [w, s, e, n] = region.bounds;
+    map.setView([(s + n) / 2, (w + e) / 2], 12);
+  }
 };
+get('measurement-home').onclick = () => {
+  get('measurement-area').value = 'world';
+  map.fitBounds([
+    [-60, -180],
+    [75, 180]
+  ]);
+};
+get('measurement-quarter').onchange = loadView;
+get('measurement-metric').onchange = () => {
+  get('measurement-threshold').value = get('measurement-metric').value === 'latency' ? 100 : 25;
+  get('measurement-compare').open = false;
+  paint();
+};
+get('measurement-settings').onsubmit = (event) => event.preventDefault();
+get('measurement-filters').onsubmit = (event) => {
+  event.preventDefault();
+  paint();
+};
+get('measurement-min-tests').onchange = () => {
+  paint();
+  if (get('measurement-compare').open) compare();
+};
+get('measurement-threshold').onchange = paint;
+get('measurement-retry').onclick = loadView;
+get('measurement-compare').ontoggle = compare;
 try {
   const response = await fetch('./measurements.json');
-  if (!response.ok) throw new Error('Data file unavailable');
+  if (!response.ok) throw new Error('Missing snapshot');
   data = await response.json();
+  get('measurement-area').disabled = false;
   get('measurement-quarter').innerHTML = data.periods
-    .map((period) => `<option value="${period.id}">${period.id}</option>`)
+    .map((p) => `<option value="${p.id}">${p.id}</option>`)
     .join('');
   get('measurement-quarter').value = data.periods.at(-1).id;
-  renderMeasurements();
+  get('measurement-periods').textContent = data.periods.map((p) => p.id).join(' / ');
+  await loadView();
 } catch (error) {
-  console.error('Measurement load failed', error);
-  get('measurement-summary').textContent =
-    'Measurements could not load. Reload to retry; the simulator still works.';
+  get('measurement-summary').textContent = 'Measurements did not load. Please reload.';
+  console.error(error);
 }

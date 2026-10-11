@@ -326,17 +326,19 @@ function drawMap() {
   const pattern = `<defs><pattern id="missed" width="7" height="7" patternUnits="userSpaceOnUse">
     <path d="M-1 1L1-1M0 7L7 0M6 8L8 6" stroke="#b95742" stroke-width=".6"/>
   </pattern></defs>`;
-  const candidate = plan?.relay;
+  const candidate = comparison && viewBefore ? null : plan?.relay;
   const marker =
     candidate && candidate.gain > 0
-      ? `<g pointer-events="none"><path d="M${candidate.x - 10} ${candidate.y}h20M${candidate.x} ${candidate.y - 10}v20" stroke="#000080" stroke-width="3"/><text x="${candidate.x + 12}" y="${Math.max(15, candidate.y - 34)}" font-size="12" fill="#000080">relay candidate</text></g>`
+      ? `<g pointer-events="none"><path d="M${candidate.x - 10} ${candidate.y}h20M${candidate.x} ${candidate.y - 10}v20" stroke="#000080" stroke-width="3"/><text x="${candidate.x + 12}" y="${Math.min(430, candidate.y + 18)}" font-size="12" fill="#000080">relay candidate</text></g>`
       : '';
   element('map').innerHTML = pattern + areas + ranges + lines + users + towers + marker;
   if (areaContext) {
     const point = network.users[selectedPoint];
     element('region-detail').textContent = point
       ? `Measured ${(point.record.downKbps / 1000).toFixed(1)} Mbps download · ${point.record.tests} tests. Scenario: ${shown.assignments[point.id] >= 0 ? 'connected to T' + (shown.assignments[point.id] + 1) : 'disconnected'}. ${point.record.lat.toFixed(4)}, ${point.record.lon.toFixed(4)}.`
-      : 'Select a measured location for its observed speed and simulated connection.';
+      : selectedRegion !== null
+        ? `${regionNames[selectedRegion]} area: ${regions[selectedRegion].connected}/${regions[selectedRegion].total} connected. Select a point for its measured speed.`
+        : 'Select an area to focus, or a point for its measured speed.';
     element('point-actions').hidden = !point;
     element('inspect-point').hidden = !point;
   } else if (selectedRegion !== null) {
@@ -585,10 +587,9 @@ function measuredMarkup() {
     </g>`;
     })
     .join('');
-  const [w, s, e, n] = areaContext.bounds;
   return (
     cells +
-    `<g pointer-events="none" font-size="11" fill="#555"><text x="8" y="16">${n.toFixed(3)}° N · ${w.toFixed(3)}° E</text><text x="792" y="434" text-anchor="end">${s.toFixed(3)}° N · ${e.toFixed(3)}° E</text><text x="8" y="434">${network.geography.widthKm.toFixed(1)} km across · assumed towers</text></g>`
+    `<g pointer-events="none" font-size="11" fill="#555"><text x="8" y="434">${network.geography.widthKm.toFixed(1)} km across · assumed towers</text></g>`
   );
 }
 function renderAreaContext() {

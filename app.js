@@ -245,7 +245,7 @@ function drawMap() {
   const candidate = plan?.relay;
   const marker =
     candidate && candidate.gain > 0
-      ? `<g pointer-events="none"><path d="M${candidate.x - 10} ${candidate.y}h20M${candidate.x} ${candidate.y - 10}v20" stroke="#000080" stroke-width="3"/><text x="${candidate.x + 12}" y="${candidate.y - 12}" font-size="12" fill="#000080">relay candidate</text></g>`
+      ? `<g pointer-events="none"><path d="M${candidate.x - 10} ${candidate.y}h20M${candidate.x} ${candidate.y - 10}v20" stroke="#000080" stroke-width="3"/><text x="${candidate.x + 12}" y="${Math.max(15, candidate.y - 34)}" font-size="12" fill="#000080">relay candidate</text></g>`
       : '';
   element('map').innerHTML = pattern + areas + ranges + lines + users + towers + marker;
   if (selectedRegion !== null) {

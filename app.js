@@ -118,7 +118,7 @@ function drawMap() {
       <rect class="region-border" x="${x + 1}" y="${y + 1}" width="198" height="144.67"
         fill="${region.total ? '#faf9f4' : '#fff'}" stroke="#d9d5ca" stroke-width=".7"/>
       ${missed ? `<rect x="${x + 3}" y="${y + 3}" width="194" height="140.67" fill="url(#missed)" opacity="${0.2 + missed / region.total * 0.6}"/>` : ''}
-      ${missed ? `<text class="region-count" x="${x + 12}" y="${y + 130}">${missed} disconnected</text>` : ''}
+      ${missed ? `<text class="region-count" x="${x + 12}" y="${y + (id < 4 ? 25 : 130)}">${missed} disconnected</text>` : ''}
     </g>`;
   }).join('');
 

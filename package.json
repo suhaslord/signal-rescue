@@ -1,1 +1,8 @@
-{"name":"signal-rescue","private":true,"type":"module","scripts":{"test":"node --test model.test.js"}}
+{
+  "name": "signal-rescue",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test model.test.js"
+  }
+}

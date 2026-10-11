@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Signal Rescue</title>
+  <link rel="stylesheet" href="fonts.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -23,9 +24,10 @@
   <section id="network">
     <div class="network">
       <div>
-        <p class="map-tools"><button id="example">fail center tower</button> <button id="restore">restore all</button> <label><input id="links" type="checkbox"> connections</label> <label><input id="ranges" type="checkbox"> ranges</label></p>
+        <p class="map-tools"><button id="example">fail center tower</button> <button id="restore">restore all</button> <label><input id="links" type="checkbox"> connections</label> <label><input id="ranges" type="checkbox"> ranges</label> <label><input id="users" type="checkbox"> individual users</label></p>
         <svg id="map" role="group" viewBox="0 0 800 440" aria-label="Network map; select a tower to toggle it"></svg>
-        <p class="legend"><span class="green">●</span> connected &nbsp; <span class="red">●</span> disconnected &nbsp; △ tower &nbsp; × outage</p>
+        <p class="legend">Connected / total users in each region. <span class="red">Red hatching</span> marks missed connections.</p>
+        <p id="region-detail" class="region-detail" role="status" aria-live="polite">Select a region to inspect it.</p>
       </div>
       <table class="towers"><caption>Towers</caption><thead><tr><th>Tower</th><th>Status</th><th>Load</th></tr></thead><tbody id="tower-controls"></tbody></table>
     </div>

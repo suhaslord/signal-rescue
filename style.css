@@ -2,18 +2,17 @@ body {
   margin: 24px;
   color: #111;
   background-color: #fffefb;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='.035' filter='url(%23grain)'/%3E%3C/svg%3E");
-  font: 16px 'Times New Roman', serif;
+  font: 15px/1.5 Bitter, Georgia, serif;
 }
 main { max-width: 1000px; margin-left: clamp(0px, 3vw, 44px); margin-right: auto; }
 header { text-align: left; margin: 30px 0 24px 9px; }
-h1 { font: bold 26px 'Courier New', monospace; letter-spacing: -1px; margin: 10px 0; }
+h1 { font: bold 33px/1.2 Bitter, Georgia, serif; letter-spacing: -1px; margin: 10px 0; }
 header nav { margin-left: 23px; }
 h2 { font-size: 18px; margin: 22px 0 10px; }
 a, summary { color: #0000a0; }
 a:hover, summary:hover { color: #672c70; }
 hr { border: 0; border-top: 1px solid #aaa; margin: 20px 0; }
-button, input, select { font: 13px Arial, sans-serif; }
+button, input, select { font: 12px Bitter, Georgia, serif; }
 button { cursor: pointer; }
 button[aria-pressed=true] { font-weight: bold; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #000080; outline-offset: 2px; }
@@ -24,9 +23,9 @@ input[type=range] { width: 140px; vertical-align: middle; }
 .map-tools { font-size: 14px; }
 #map { display: block; width: 100%; border: 1px solid #aaa; background: #fff; }
 #map .tower { cursor: pointer; }
-#map .tower:hover polygon { fill: #672c70; }
+#map .tower:hover .mast { stroke: #844124; }
 #map .tower:hover rect { stroke: #672c70; stroke-width: 1px; }
-#map .user-dot:hover { r: 6px; stroke: #111; stroke-width: 1px; }
+#map .user-dot:hover { r: 5px; stroke: #111; stroke-width: 1px; }
 #map .tower:focus { outline: none; }
 #map .tower:focus rect { stroke: #000080; stroke-width: 3px; }
 .legend { font-size: 13px; margin: 7px 0; }
@@ -51,3 +50,13 @@ details p { line-height: 1.5; max-width: 760px; }
   .towers { max-width: 100%; }
   th, td { padding: 7px 3px; }
 }
+
+#map { font-family: Bitter, Georgia, serif; }
+#map .region { cursor: pointer; }
+#map .region:hover .region-border { stroke: #555; stroke-width: 2px; }
+#map .region:focus { outline: none; }
+#map .region:focus .region-border { stroke: #000080; stroke-width: 2px; }
+#map .region-count { fill: #666; font-size: 15px; }
+#map .region[aria-pressed=true] .region-border { stroke: #844124; stroke-width: 2px; }
+.region-detail { font-size: 13px; min-height: 20px; margin: 5px 0 0; }
+.map-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }

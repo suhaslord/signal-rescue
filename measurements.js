@@ -373,3 +373,7 @@ document.addEventListener('inspect-location', (event) => {
   map.setView([r.lat, r.lon], 14, { animate: false });
   L.popup().setLatLng([r.lat, r.lon]).setContent(detail(r)).openOn(map);
 });
+
+document.addEventListener('view-changed', (event) => {
+  if (event.detail === 'measurements') map.invalidateSize({ pan: false });
+});

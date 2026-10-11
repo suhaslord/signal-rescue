@@ -13,9 +13,8 @@
       <header>
         <h1>Signal Rescue</h1>
         <nav>
-          <a href="#measurements">measurements</a> &middot;
-          <a href="#network">simulation</a> &middot; <a href="#results">results</a> &middot;
-          <a href="#method">method</a> &middot;
+          <a href="#measurements" data-view="measurements">map</a> &middot;
+          <a href="#scenarios" data-view="scenarios">scenarios</a> &middot;
           <a href="https://github.com/suhaslord/signal-rescue">source</a>
         </nav>
       </header>
@@ -107,253 +106,298 @@
           </p>
         </details>
       </section>
-      <hr />
-      <section id="area-context" hidden>
-        <h2 id="area-title"></h2>
-        <p id="area-evidence"></p>
-        <p class="legend">
-          Each point is a measured location, not a person. Towers, reach and slots below are
-          assumptions. This tests connectivity, not future speeds.
-        </p>
-        <p>
-          <a href="#measurements">back to measurements</a> ·
-          <a id="area-report" download="area-scenario.csv">download evidence + scenario</a>
-        </p>
-      </section>
-      <form id="settings">
-        <h2>Scenario</h2>
-        <label
-          >Layout
-          <select id="scenario">
-            <option value="town">Town</option>
-            <option value="single">Single tower</option>
-            <option value="rural">Rural</option>
-            <option value="crowd">Crowded</option>
-          </select></label
-        >
-        <label
-          ><span id="point-label">Users</span>
-          <input id="population" type="number" min="20" max="500" step="10" value="180" required
-        /></label>
-        <label
-          >Capacity / tower
-          <input id="capacity" type="number" min="1" max="200" value="40" required
-        /></label>
-        <label id="reach-label" hidden
-          >Assumed reach (km)
-          <input id="area-reach" type="number" min="0.1" max="100" step="0.1" value="5" required
-        /></label>
-        <button type="submit">apply</button>
-        <button id="reset-scenario" type="button">reset</button>
-      </form>
-      <section id="network">
-        <div class="network">
-          <div>
-            <div class="map-tools">
-              <button id="example">disable center tower</button>
-              <button id="restore">restore all</button>
-              <details class="display-options">
-                <summary>Display options</summary>
-                <label><input id="links" type="checkbox" /> connections</label>
-                <label><input id="ranges" type="checkbox" /> ranges</label>
-                <label><input id="users" type="checkbox" /> individual users</label>
-              </details>
+      <section id="scenarios" hidden>
+        <h2>Scenarios</h2>
+        <p class="legend">Choose a layout. Click a tower to fail it, then optimize.</p>
+        <div id="scenario-choices" aria-label="Choose a scenario">
+          <button type="button" data-layout="town">town</button>
+          <button type="button" data-layout="rural">rural</button>
+          <button type="button" data-layout="single">single tower</button>
+          <button type="button" data-layout="crowd">crowded</button>
+        </div>
+        <p id="scenario-caption" class="legend"></p>
+        <section id="area-context" hidden>
+          <h2 id="area-title"></h2>
+          <p id="area-evidence"></p>
+          <p class="legend">
+            Each point is a measured location, not a person. Towers, reach and slots below are
+            assumptions. This tests connectivity, not future speeds.
+          </p>
+          <p>
+            <a href="#measurements">back to measurements</a> ·
+            <a id="area-report" download="area-scenario.csv">download evidence + scenario</a>
+          </p>
+        </section>
+        <details id="scenario-settings">
+          <summary>change assumptions</summary>
+          <form id="settings">
+            <label
+              >Layout
+              <select id="scenario">
+                <option value="town">Town</option>
+                <option value="single">Single tower</option>
+                <option value="rural">Rural</option>
+                <option value="crowd">Crowded</option>
+              </select></label
+            >
+            <label
+              ><span id="point-label">Users</span>
+              <input
+                id="population"
+                type="number"
+                min="20"
+                max="500"
+                step="10"
+                value="180"
+                required
+            /></label>
+            <label
+              >Capacity / tower
+              <input id="capacity" type="number" min="1" max="200" value="40" required
+            /></label>
+            <label id="reach-label" hidden
+              >Assumed reach (km)
+              <input
+                id="area-reach"
+                type="number"
+                min="0.1"
+                max="100"
+                step="0.1"
+                value="5"
+                required
+            /></label>
+            <button type="submit">apply</button>
+            <button id="reset-scenario" type="button">reset</button>
+          </form>
+        </details>
+        <section id="network">
+          <div class="network">
+            <div>
+              <div class="map-tools">
+                <button id="example">disable center tower</button>
+                <button id="restore">restore all</button>
+                <button id="optimize" type="button">optimize connections</button>
+                <details class="display-options">
+                  <summary>Display options</summary>
+                  <label><input id="links" type="checkbox" /> connections</label>
+                  <label><input id="ranges" type="checkbox" /> ranges</label>
+                  <label><input id="users" type="checkbox" /> individual users</label>
+                </details>
+              </div>
+              <p id="optimization-summary" role="status" aria-live="polite"></p>
+              <svg
+                id="map"
+                role="group"
+                viewBox="0 0 800 440"
+                aria-label="Network map; select a tower to toggle it"
+              ></svg>
+              <p class="legend" id="scenario-legend">
+                <span class="red">Shading</span> marks disconnected users. Click an area for counts
+                or a tower to switch it.
+              </p>
+              <p id="region-detail" class="region-detail" role="status" aria-live="polite">
+                Select a region to inspect it.
+              </p>
+              <div id="point-actions" hidden>
+                <button id="inspect-point" type="button" hidden>show on measured map</button> ·
+                <select id="move-tower" aria-label="Assumed tower to move"></select>
+                <button id="place-tower" type="button">place here</button>
+              </div>
             </div>
-            <svg
-              id="map"
-              role="group"
-              viewBox="0 0 800 440"
-              aria-label="Network map; select a tower to toggle it"
-            ></svg>
-            <p class="legend" id="scenario-legend">
-              <span class="red">Shading</span> marks disconnected users. Click an area for counts or
-              a tower to switch it.
-            </p>
-            <p id="region-detail" class="region-detail" role="status" aria-live="polite">
-              Select a region to inspect it.
-            </p>
-            <div id="point-actions" hidden>
-              <button id="inspect-point" type="button" hidden>show on measured map</button> ·
-              <select id="move-tower" aria-label="Assumed tower to move"></select>
-              <button id="place-tower" type="button">place here</button>
-            </div>
+            <details class="tower-list">
+              <summary>Tower loads</summary>
+              <table class="towers">
+                <caption>
+                  Towers
+                </caption>
+                <thead>
+                  <tr>
+                    <th>Tower</th>
+                    <th>Status</th>
+                    <th>Load</th>
+                  </tr>
+                </thead>
+                <tbody id="tower-controls"></tbody>
+              </table>
+            </details>
           </div>
-          <details class="tower-list">
-            <summary>Tower loads</summary>
-            <table class="towers">
+          <details id="power">
+            <summary>power outage</summary>
+            <form id="power-settings">
+              <label><input id="grid-outage" type="checkbox" /> grid power off</label>
+              <label
+                >Backup / tower
+                <input
+                  id="backup-hours"
+                  type="number"
+                  min="0"
+                  max="8"
+                  step="0.5"
+                  value="2"
+                  required
+                />
+                h</label
+              >
+              <label
+                >Elapsed
+                <input id="outage-hours" type="range" min="0" max="8" step="0.5" value="0" /><output
+                  id="outage-hours-value"
+                  >0 h</output
+                ></label
+              >
+            </form>
+            <p id="power-summary"></p>
+            <details id="power-history" hidden>
+              <summary>8-hour timeline</summary>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Hours</th>
+                    <th>Powered towers</th>
+                    <th>Connected</th>
+                  </tr>
+                </thead>
+                <tbody id="power-rows"></tbody>
+              </table>
+              <a id="power-export" download="power-outage.csv">download csv</a>
+            </details>
+          </details>
+          <details id="manual-recovery">
+            <summary>manual recovery controls</summary>
+            <p class="recovery">
+              <button data-strategy="balanced">reassign users</button>
+              <button data-strategy="boost">extend range</button>
+              <button data-strategy="combined">both</button>
+              <button data-strategy="none">clear</button>
+            </p>
+            <p>
+              <label
+                >Range extension
+                <input id="boost" type="range" min="0" max="100" step="5" value="35" />
+                <output id="boost-value">35%</output></label
+              >
+            </p>
+            <p>
+              <label
+                >Maximum range increase
+                <input
+                  id="optimization-limit"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value="35"
+                  required
+                />
+                %</label
+              >
+            </p>
+          </details>
+          <p id="status" role="status" aria-live="polite"></p>
+        </section>
+        <section id="results">
+          <h2>
+            Results
+            <a id="export" href="#" download="signal-rescue-results.csv">download csv</a>
+          </h2>
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>All towers on</th>
+                <th>Outage</th>
+                <th id="recovery-heading">Recovery</th>
+              </tr>
+            </thead>
+            <tbody id="metrics"></tbody>
+          </table>
+          <details>
+            <summary>compare strategies</summary>
+            <table>
+              <thead>
+                <tr>
+                  <th>Strategy</th>
+                  <th>Connected</th>
+                  <th>Coverage</th>
+                  <th>Range</th>
+                </tr>
+              </thead>
+              <tbody id="comparison"></tbody>
+            </table>
+          </details>
+        </section>
+        <details id="planner">
+          <summary>compare a repair or relay</summary>
+          <form id="planning-settings">
+            <label
+              >Temporary relay slots
+              <input id="relay-capacity" type="number" min="1" max="200" value="30" required
+            /></label>
+            <label
+              >Relay reach<span id="relay-unit"></span>
+              <input id="relay-range" type="number" min="25" max="300" value="135" required
+            /></label>
+            <button type="submit">compare options</button>
+            <button id="remove-relay" type="button" hidden>remove relay</button>
+          </form>
+          <p id="planning-note" role="status">Compare repairs, range and one relay.</p>
+          <div id="planning-results" hidden>
+            <table>
               <caption>
-                Towers
+                Repair one tower first
               </caption>
               <thead>
                 <tr>
                   <th>Tower</th>
-                  <th>Status</th>
-                  <th>Load</th>
-                </tr>
-              </thead>
-              <tbody id="tower-controls"></tbody>
-            </table>
-          </details>
-        </div>
-        <details id="power">
-          <summary>power outage</summary>
-          <form id="power-settings">
-            <label><input id="grid-outage" type="checkbox" /> grid power off</label>
-            <label
-              >Backup / tower
-              <input
-                id="backup-hours"
-                type="number"
-                min="0"
-                max="8"
-                step="0.5"
-                value="2"
-                required
-              />
-              h</label
-            >
-            <label
-              >Elapsed
-              <input id="outage-hours" type="range" min="0" max="8" step="0.5" value="0" /><output
-                id="outage-hours-value"
-                >0 h</output
-              ></label
-            >
-          </form>
-          <p id="power-summary"></p>
-          <details id="power-history" hidden>
-            <summary>8-hour timeline</summary>
-            <table>
-              <thead>
-                <tr>
-                  <th>Hours</th>
-                  <th>Powered towers</th>
                   <th>Connected</th>
+                  <th id="repair-unit">Additional users</th>
+                  <th></th>
                 </tr>
               </thead>
-              <tbody id="power-rows"></tbody>
+              <tbody id="repair-ranking"></tbody>
             </table>
-            <a id="power-export" download="power-outage.csv">download csv</a>
-          </details>
+            <p id="range-advice"></p>
+            <button id="apply-range" type="button">use this range</button>
+            <details>
+              <summary>range sweep, 0–100%</summary>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Extension</th>
+                    <th>Connected</th>
+                    <th>Out of range</th>
+                    <th>Capacity blocked</th>
+                  </tr>
+                </thead>
+                <tbody id="range-sweep"></tbody>
+              </table>
+            </details>
+            <p id="relay-advice"></p>
+            <button id="apply-relay" type="button">try this relay</button>
+            <a id="planning-export" download="signal-rescue-plan.csv">download plan csv</a>
+          </div>
+          <p id="planner-limits">
+            Simulated reach, not metres. Relay needs power and backhaul. Options use reassignment;
+            repairs and relay use the current extension.
+          </p>
         </details>
-        <h2>Recovery</h2>
-        <p class="recovery">
-          <button data-strategy="balanced">reassign users</button>
-          <button data-strategy="boost">extend range</button>
-          <button data-strategy="combined">both</button>
-          <button data-strategy="none">clear</button>
-        </p>
-        <p>
-          <label
-            >Range extension
-            <input id="boost" type="range" min="0" max="100" step="5" value="35" />
-            <output id="boost-value">35%</output></label
-          >
-        </p>
-        <p id="status" role="status" aria-live="polite"></p>
-      </section>
-      <section id="results">
-        <h2>
-          Results
-          <a id="export" href="#" download="signal-rescue-results.csv">download csv</a>
-        </h2>
-        <table>
-          <thead>
-            <tr>
-              <th></th>
-              <th>All towers on</th>
-              <th>Outage</th>
-              <th id="recovery-heading">Recovery</th>
-            </tr>
-          </thead>
-          <tbody id="metrics"></tbody>
-        </table>
-        <details>
-          <summary>compare strategies</summary>
-          <table>
-            <thead>
-              <tr>
-                <th>Strategy</th>
-                <th>Connected</th>
-                <th>Coverage</th>
-                <th>Range</th>
-              </tr>
-            </thead>
-            <tbody id="comparison"></tbody>
-          </table>
+        <hr />
+        <details id="method">
+          <summary>method</summary>
+          <p>
+            Users need coverage and a free tower slot. Reassignment moves connections to fit more
+            users; extension increases simulated reach.
+          </p>
+          <p>
+            Repairs are ranked by connections restored. Relay search tests 144 locations. Range
+            sweep uses 5% steps. Layouts are repeatable.
+          </p>
+          <p>
+            Inspired by rural connectivity in India. Simulation uses assumed coverage and backup
+            duration; no terrain, interference or repair costs. Runs in your browser.
+          </p>
         </details>
       </section>
-      <details id="planner">
-        <summary>plan the next step</summary>
-        <form id="planning-settings">
-          <label
-            >Temporary relay slots
-            <input id="relay-capacity" type="number" min="1" max="200" value="30" required
-          /></label>
-          <label
-            >Relay reach<span id="relay-unit"></span>
-            <input id="relay-range" type="number" min="25" max="300" value="135" required
-          /></label>
-          <button type="submit">compare options</button>
-          <button id="remove-relay" type="button" hidden>remove relay</button>
-        </form>
-        <p id="planning-note" role="status">Compare repairs, range and one relay.</p>
-        <div id="planning-results" hidden>
-          <table>
-            <caption>
-              Repair one tower first
-            </caption>
-            <thead>
-              <tr>
-                <th>Tower</th>
-                <th>Connected</th>
-                <th id="repair-unit">Additional users</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="repair-ranking"></tbody>
-          </table>
-          <p id="range-advice"></p>
-          <button id="apply-range" type="button">use this range</button>
-          <details>
-            <summary>range sweep, 0–100%</summary>
-            <table>
-              <thead>
-                <tr>
-                  <th>Extension</th>
-                  <th>Connected</th>
-                  <th>Out of range</th>
-                  <th>Capacity blocked</th>
-                </tr>
-              </thead>
-              <tbody id="range-sweep"></tbody>
-            </table>
-          </details>
-          <p id="relay-advice"></p>
-          <button id="apply-relay" type="button">try this relay</button>
-          <a id="planning-export" download="signal-rescue-plan.csv">download plan csv</a>
-        </div>
-        <p id="planner-limits">
-          Simulated reach, not metres. Relay needs power and backhaul. Options use reassignment;
-          repairs and relay use the current extension.
-        </p>
-      </details>
-      <hr />
-      <details id="method">
-        <summary>method</summary>
-        <p>
-          Users need coverage and a free tower slot. Reassignment moves connections to fit more
-          users; extension increases simulated reach.
-        </p>
-        <p>
-          Repairs are ranked by connections restored. Relay search tests 144 locations. Range sweep
-          uses 5% steps. Layouts are repeatable.
-        </p>
-        <p>
-          Inspired by rural connectivity in India. Simulation uses assumed coverage and backup
-          duration; no terrain, interference or repair costs. Runs in your browser.
-        </p>
-      </details>
     </main>
     <script type="module" src="app.js"></script>
     <script src="leaflet.js"></script>

@@ -281,3 +281,15 @@ export function planningCsv(repairs, sweep, relay, extension = 35) {
     ]);
   return rows.map((row) => row.join(',')).join('\n') + '\n';
 }
+
+// Within the allowed range increase, prefer the least extension with best connectivity.
+export function optimizeConnections(network, maximumExtension = 35) {
+  const limit = Math.max(0, Math.min(100, Number(maximumExtension) || 0));
+  const candidates = rangeSweep(network).filter((point) => point.extension <= limit);
+  const best = candidates.reduce((a, b) => (b.connected > a.connected ? b : a));
+  return {
+    ...best,
+    result: recoverNetwork(network, 'combined', best.extension),
+    before: assignUsers(network).connected
+  };
+}

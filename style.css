@@ -340,3 +340,35 @@ details p {
     height: 390px;
   }
 }
+
+[hidden] {
+  display: none !important;
+}
+[data-view][aria-current='page'] {
+  font-weight: bold;
+  color: #111;
+}
+#scenario-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+#scenario-choices button {
+  font:
+    15px Georgia,
+    serif;
+  padding: 5px 12px;
+}
+#scenario-choices button[aria-pressed='true'] {
+  border: 2px solid #333;
+  background: #eeeae0;
+}
+#optimization-summary {
+  margin: 8px 0 14px;
+  font-size: 14px;
+}
+#optimize {
+  font-weight: bold;
+  padding: 4px 10px;
+}

@@ -9,7 +9,8 @@ import {
   rangeSweep,
   withRelay,
   planRelay,
-  planningCsv
+  planningCsv,
+  optimizeConnections
 } from './model.js';
 
 test('repeatable scenarios and capacity-safe recovery', () => {
@@ -178,4 +179,21 @@ test('a relay still needs available capacity, and no outage means no repairs', (
   network.towers.forEach((tower) => (tower.active = false));
   const relay = planRelay(network, 5, 300, 0);
   assert.ok(relay.connected > 0 && relay.connected <= 5);
+});
+
+test('one-click optimization respects the range budget and chooses the smallest best extension', () => {
+  for (const layout of ['town', 'rural', 'single', 'crowd']) {
+    const network = makeNetwork(layout, 180, 40);
+    network.towers[Math.min(2, network.towers.length - 1)].active = false;
+    for (const limit of [0, 15, 35, 100]) {
+      const choice = optimizeConnections(network, limit);
+      const candidates = rangeSweep(network).filter((p) => p.extension <= limit);
+      const maximum = Math.max(...candidates.map((p) => p.connected));
+      assert.equal(choice.connected, maximum);
+      assert.equal(choice.extension, candidates.find((p) => p.connected === maximum).extension);
+      assert.ok(choice.connected >= choice.before);
+      assert.ok(choice.extension <= limit);
+      choice.result.loads.forEach((load, id) => assert.ok(load <= network.towers[id].capacity));
+    }
+  }
 });

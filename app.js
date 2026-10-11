@@ -10,7 +10,8 @@ import {
   withRelay,
   planningCsv,
   powerOutage,
-  powerTimeline
+  powerTimeline,
+  optimizeConnections
 } from './model.js';
 
 const element = (id) => document.getElementById(id);
@@ -83,6 +84,19 @@ function render() {
   plan = null;
   element('planning-results').hidden = true;
   element('planning-note').textContent = 'Compare again after changing the scenario.';
+  element('optimization-summary').textContent = 'Ready to optimize this scenario.';
+  document.querySelectorAll('[data-layout]').forEach((button) => {
+    button.setAttribute('aria-pressed', button.dataset.layout === element('scenario').value);
+    button.disabled = !!areaContext && button.dataset.layout === 'crowd';
+  });
+  element('scenario-caption').textContent = areaContext
+    ? 'Using measured locations from your selected area; towers are assumed.'
+    : {
+        town: 'Five towers across a town.',
+        rural: 'Five towers along a rural route.',
+        single: 'One tower serving nearby users.',
+        crowd: 'Most users gathered near the centre.'
+      }[element('scenario').value];
   element('remove-relay').hidden = !network.towers.some((tower) => tower.temporary);
   const extension = Number(element('boost').value);
   const healthy = assignUsers({
@@ -365,6 +379,7 @@ element('reset-scenario').onclick = () => {
   element('planning-settings').reset();
   element('power-settings').reset();
   element('boost').value = 35;
+  element('optimization-limit').value = 35;
   element('links').checked = false;
   element('ranges').checked = false;
   element('users').checked = false;
@@ -528,6 +543,7 @@ function renderAreaContext() {
   element('area-context').hidden = !areaContext;
   element('reach-label').hidden = !areaContext;
   element('population').disabled = !!areaContext;
+  element('scenario').querySelector('option[value=crowd]').disabled = !!areaContext;
   element('repair-unit').textContent = areaContext ? 'Additional locations' : 'Additional users';
   element('relay-unit').textContent = areaContext ? ' (km)' : '';
   element('relay-range').min = areaContext ? '0.1' : '25';
@@ -606,4 +622,87 @@ element('place-tower').onclick = () => {
   tower.x = point.x;
   tower.y = point.y;
   render();
+};
+
+function showView(view) {
+  const scenarios = view === 'scenarios';
+  element('scenarios').hidden = !scenarios;
+  element('measurements').hidden = scenarios;
+  document
+    .querySelectorAll('[data-view]')
+    .forEach((link) =>
+      link.setAttribute('aria-current', link.dataset.view === view ? 'page' : 'false')
+    );
+  document.dispatchEvent(new CustomEvent('view-changed', { detail: view }));
+}
+document.querySelectorAll('[data-view]').forEach((link) => {
+  link.onclick = () => showView(link.dataset.view);
+});
+window.addEventListener('hashchange', () =>
+  showView(location.hash === '#measurements' || !location.hash ? 'measurements' : 'scenarios')
+);
+showView(location.hash && location.hash !== '#measurements' ? 'scenarios' : 'measurements');
+document.addEventListener('area-scenario', () => {
+  showView('scenarios');
+  location.hash = 'scenarios';
+});
+document.addEventListener('inspect-location', () => {
+  showView('measurements');
+  location.hash = 'measurements';
+});
+
+document.querySelectorAll('[data-layout]').forEach((button) => {
+  button.onclick = () => {
+    const layout = button.dataset.layout;
+    element('scenario').value = layout;
+    element('power-settings').reset();
+    element('planning-settings').reset();
+    element('boost').value = 35;
+    element('users').checked = true;
+    element('optimization-limit').value = 35;
+    selectedRegion = selectedPoint = null;
+    strategy = 'none';
+    if (areaContext) {
+      element('capacity').value =
+        layout === 'single'
+          ? Math.min(200, areaContext.records.length)
+          : Math.ceil(Math.min(500, areaContext.records.length) / 4);
+      network = areaScenario(
+        areaContext.records,
+        areaContext.bounds,
+        Number(element('capacity').value),
+        layout,
+        Number(element('area-reach').value)
+      );
+      element('relay-range').value = 5;
+    } else {
+      element('population').value = layout === 'single' ? 80 : 180;
+      element('capacity').value = layout === 'single' ? 100 : 40;
+      network = makeNetwork(
+        layout,
+        Number(element('population').value),
+        Number(element('capacity').value)
+      );
+    }
+    render();
+  };
+});
+element('optimize').onclick = () => {
+  if (!element('optimization-limit').reportValidity()) {
+    element('manual-recovery').open = true;
+    return;
+  }
+  const choice = optimizeConnections(operating, Number(element('optimization-limit').value));
+  element('boost').value = choice.extension;
+  strategy = 'combined';
+  render();
+  const noun = areaContext ? 'locations' : 'users';
+  element('optimization-summary').textContent =
+    `${choice.before} → ${choice.connected} of ${network.users.length} ${noun} connected. Reassignment + ${choice.extension}% range increase. ${choice.outOfRange} out of range; ${choice.congested} capacity blocked.`;
+  if (!operating.towers.some((t) => t.active))
+    element('optimization-summary').textContent =
+      '0 connected. No working tower; compare a repair or powered relay below.';
+};
+element('optimization-limit').onchange = () => {
+  element('optimization-summary').textContent = 'Range limit changed. Optimize again.';
 };

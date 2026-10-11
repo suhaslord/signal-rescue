@@ -244,8 +244,11 @@ map.on('popupopen', (event) => {
   if (button)
     button.onclick = () => {
       const point = event.popup.getLatLng();
+      map.stop();
+      popupPanning = false;
       map.closePopup();
-      map.setView(point, Math.min(14, map.getZoom() + 3));
+      map.setView(point, Math.min(14, Math.max(5, map.getZoom() + 3)), { animate: false });
+      loadView();
     };
 });
 map.on('autopanstart', () => { popupPanning = true; });

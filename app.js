@@ -140,7 +140,7 @@ function drawMap() {
       aria-label="${towerName(id)} on map" aria-pressed="${active}">
       <title>${towerName(id)}: ${active ? `${current.loads[id]} of ${tower.capacity} slots used. Click to switch off.` : 'off. Click to bring it back.'}</title>
       <rect x="${x - 19}" y="${y - 20}" width="38" height="49" fill="#fffefb"/>
-      ${symbol}<text x="${x}" y="${y + 21}" text-anchor="middle" font-size="14" font-weight="700">${towerName(id)}</text></g>`;
+      ${symbol}<text x="${x}" y="${y + 21}" text-anchor="middle" font-size="22" font-weight="700">${towerName(id)}</text></g>`;
   }).join('');
 
   const pattern = `<defs><pattern id="missed" width="7" height="7" patternUnits="userSpaceOnUse">

@@ -56,7 +56,9 @@ details p { line-height: 1.5; max-width: 760px; }
 #map .region:hover .region-border { stroke: #555; stroke-width: 2px; }
 #map .region:focus { outline: none; }
 #map .region:focus .region-border { stroke: #000080; stroke-width: 2px; }
-#map .region-count { fill: #666; font-size: 15px; }
+#map .region-count { fill: #555; font-size: 22px; }
 #map .region[aria-pressed=true] .region-border { stroke: #844124; stroke-width: 2px; }
 .region-detail { font-size: 13px; min-height: 20px; margin: 5px 0 0; }
 .map-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+
+@media (max-width: 650px) { #map .region-count { font-size: 28px; } }

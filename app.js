@@ -89,19 +89,19 @@ function drawMap() {
   const ranges = element('ranges').checked ? network.towers
     .filter(tower => tower.active)
     .map(tower => `<circle cx="${tower.x}" cy="${tower.y}" r="${tower.range * current.multiplier}"
-      fill="none" stroke="#bbb" stroke-dasharray="4 4"/>`).join('') : '';
+      fill="none" stroke="#bbb" stroke-dasharray="4 4" pointer-events="none"/>`).join('') : '';
 
   const lines = element('links').checked ? network.users.map(user => {
     const tower = network.towers[current.assignments[user.id]];
     if (!tower) return '';
-    return `<path d="M${user.x} ${user.y}L${tower.x} ${tower.y}" stroke="#aaa" stroke-opacity=".4"/>`;
+    return `<path d="M${user.x} ${user.y}L${tower.x} ${tower.y}" stroke="#aaa" stroke-opacity=".4" pointer-events="none"/>`;
   }).join('') : '';
 
-  const regions = Array.from({length: 32}, () => ({total: 0, connected: 0, outOfRange: 0}));
+  const regions = Array.from({length: 12}, () => ({total: 0, connected: 0, outOfRange: 0}));
   for (const user of network.users) {
-    const column = Math.min(7, Math.floor(user.x / 100));
-    const row = Math.min(3, Math.floor(user.y / 110));
-    const region = regions[row * 8 + column];
+    const column = Math.min(3, Math.floor(user.x / 200));
+    const row = Math.min(2, Math.floor(user.y / (440 / 3)));
+    const region = regions[row * 4 + column];
     region.total++;
     if (current.assignments[user.id] >= 0) region.connected++;
     else if (!network.towers.some(tower => tower.active &&
@@ -109,16 +109,16 @@ function drawMap() {
   }
 
   const areas = regions.map((region, id) => {
-    const x = id % 8 * 100;
-    const y = Math.floor(id / 8) * 110;
+    const x = id % 4 * 200;
+    const y = Math.floor(id / 4) * (440 / 3);
     const missed = region.total - region.connected;
     return `<g class="region" data-region="${id}" tabindex="0" role="button"
       aria-label="Region ${id + 1}: ${region.connected} of ${region.total} connected"
       aria-pressed="${selectedRegion === id}">
-      <rect class="region-border" x="${x + 1}" y="${y + 1}" width="98" height="108"
+      <rect class="region-border" x="${x + 1}" y="${y + 1}" width="198" height="144.67"
         fill="${region.total ? '#faf9f4' : '#fff'}" stroke="#d9d5ca" stroke-width=".7"/>
-      ${missed ? `<rect x="${x + 3}" y="${y + 3}" width="94" height="104" fill="url(#missed)" opacity="${0.2 + missed / region.total * 0.6}"/>` : ''}
-      <text class="region-count" x="${x + 88}" y="${y + 96}" text-anchor="end">${region.total ? `${region.connected}/${region.total}` : '–'}</text>
+      ${missed ? `<rect x="${x + 3}" y="${y + 3}" width="194" height="140.67" fill="url(#missed)" opacity="${0.2 + missed / region.total * 0.6}"/>` : ''}
+      ${missed ? `<text class="region-count" x="${x + 12}" y="${y + 130}">${missed} disconnected</text>` : ''}
     </g>`;
   }).join('');
 
@@ -131,16 +131,11 @@ function drawMap() {
   const towers = network.towers.map(tower => {
     const {x, y, id, active} = tower;
     const ink = active ? '#333' : '#ad3225';
-    const symbol = `<g class="mast" stroke="${ink}" stroke-width="1.6" fill="none">
-      <path d="M${x} ${y - 14}L${x - 9} ${y + 10}M${x} ${y - 14}L${x + 9} ${y + 10}M${x - 6} ${y + 3}H${x + 6}M${x - 4} ${y - 3}H${x + 4}"/>
-      ${active ? `<path d="M${x - 9} ${y - 20}q-5 7 0 14M${x + 9} ${y - 20}q5 7 0 14"/>`
-        : `<path d="M${x - 12} ${y - 18}L${x + 12} ${y + 9}"/>`}
-    </g>`;
     return `<g class="tower" data-tower="${id}" tabindex="0" role="button"
       aria-label="${towerName(id)} on map" aria-pressed="${active}">
       <title>${towerName(id)}: ${active ? `${current.loads[id]} of ${tower.capacity} slots used. Click to switch off.` : 'off. Click to bring it back.'}</title>
-      <rect x="${x - 19}" y="${y - 20}" width="38" height="49" fill="#fffefb"/>
-      ${symbol}<text x="${x}" y="${y + 21}" text-anchor="middle" font-size="22" font-weight="700">${towerName(id)}</text></g>`;
+      <circle cx="${x}" cy="${y}" r="20" fill="${active ? '#fffefb' : '#ad3225'}" stroke="${ink}" stroke-width="2"/>
+      <text x="${x}" y="${y + 6}" text-anchor="middle" font-size="18" fill="${active ? '#111' : '#fff'}">${towerName(id)}</text></g>`;
   }).join('');
 
   const pattern = `<defs><pattern id="missed" width="7" height="7" patternUnits="userSpaceOnUse">

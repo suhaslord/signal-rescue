@@ -16,6 +16,6 @@ Initial implementation generated with Codex following Suhas's project and visual
 
 ## Display and type
 
-The map groups the same synthetic users into 32 spatial regions and shows connected/total counts. Red hatching means at least one user in that region remains disconnected. Region selection reports out-of-range and capacity-blocked users separately; individual positions remain available as a toggle. The display does not add terrain or actual geographic data to the model.
+The map groups the same synthetic users into 12 spatial regions and shows disconnected counts in affected areas. Red hatching means at least one user in that region remains disconnected. Region selection shows connected/total counts and reports out-of-range and capacity-blocked users separately; individual positions remain available as a toggle. The display does not add terrain or actual geographic data to the model.
 
 Bitter is bundled as Latin-subset WOFF2 data in fonts.css, with its SIL Open Font License in Bitter-License.txt. The face is by the Bitter Project Authors; source: https://github.com/google/fonts/tree/main/ofl/bitter.

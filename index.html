@@ -15,6 +15,7 @@
   </header>
   <hr>
   <form id="settings">
+    <h2>Scenario</h2>
     <label>Layout <select id="scenario"><option value="town">Town</option><option value="rural">Rural</option><option value="crowd">Crowded</option></select></label>
     <label>Users <input id="population" type="number" min="20" max="500" step="10" value="180" required></label>
     <label>Capacity / tower <input id="capacity" type="number" min="1" max="200" value="40" required></label>
@@ -24,14 +25,15 @@
   <section id="network">
     <div class="network">
       <div>
-        <p class="map-tools"><button id="example">fail center tower</button> <button id="restore">restore all</button> <label><input id="links" type="checkbox"> connections</label> <label><input id="ranges" type="checkbox"> ranges</label> <label><input id="users" type="checkbox"> individual users</label></p>
+        <div class="map-tools"><button id="example">disable center tower</button> <button id="restore">restore all</button>
+        <details class="display-options"><summary>Display options</summary><label><input id="links" type="checkbox"> connections</label> <label><input id="ranges" type="checkbox"> ranges</label> <label><input id="users" type="checkbox"> individual users</label></details></div>
         <svg id="map" role="group" viewBox="0 0 800 440" aria-label="Network map; select a tower to toggle it"></svg>
-        <p class="legend">Connected / total users in each region. <span class="red">Red hatching</span> marks missed connections.</p>
+        <p class="legend"><span class="red">Shaded areas</span> have disconnected users. Select an area for counts; select a tower to switch it.</p>
         <p id="region-detail" class="region-detail" role="status" aria-live="polite">Select a region to inspect it.</p>
       </div>
-      <table class="towers"><caption>Towers</caption><thead><tr><th>Tower</th><th>Status</th><th>Load</th></tr></thead><tbody id="tower-controls"></tbody></table>
+      <details class="tower-list"><summary>Tower loads</summary><table class="towers"><caption>Towers</caption><thead><tr><th>Tower</th><th>Status</th><th>Load</th></tr></thead><tbody id="tower-controls"></tbody></table></details>
     </div>
-    <p class="recovery"><b>Recover:</b> <button data-strategy="balanced">reassign users</button> <button data-strategy="boost">extend range</button> <button data-strategy="combined">both</button> <button data-strategy="none">clear</button></p>
+    <h2>Recovery</h2><p class="recovery"> <button data-strategy="balanced">reassign users</button> <button data-strategy="boost">extend range</button> <button data-strategy="combined">both</button> <button data-strategy="none">clear</button></p>
     <p><label>Range extension <input id="boost" type="range" min="0" max="100" step="5" value="35"> <output id="boost-value">35%</output></label></p>
     <p id="status" role="status" aria-live="polite"></p>
   </section>

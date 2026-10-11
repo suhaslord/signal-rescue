@@ -2,7 +2,7 @@ body {
   margin: 24px;
   color: #111;
   background-color: #fffefb;
-  font: 15px/1.5 Bitter, Georgia, serif;
+  font: 16px/1.5 Georgia, serif;
 }
 main { max-width: 1000px; margin-left: clamp(0px, 3vw, 44px); margin-right: auto; }
 header { text-align: left; margin: 30px 0 24px 9px; }
@@ -12,22 +12,22 @@ h2 { font-size: 18px; margin: 22px 0 10px; }
 a, summary { color: #0000a0; }
 a:hover, summary:hover { color: #672c70; }
 hr { border: 0; border-top: 1px solid #aaa; margin: 20px 0; }
-button, input, select { font: 12px Bitter, Georgia, serif; }
+button, input, select { font: 13px Verdana, sans-serif; }
 button { cursor: pointer; }
 button[aria-pressed=true] { font-weight: bold; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #000080; outline-offset: 2px; }
 #settings { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
 input[type=number] { width: 55px; }
 input[type=range] { width: 140px; vertical-align: middle; }
-.network { display: grid; grid-template-columns: 1fr 185px; gap: 24px; align-items: start; }
+.network { display: block; margin-top: 20px; }
 .map-tools { font-size: 14px; }
 #map { display: block; width: 100%; border: 1px solid #aaa; background: #fff; }
 #map .tower { cursor: pointer; }
-#map .tower:hover .mast { stroke: #844124; }
-#map .tower:hover rect { stroke: #672c70; stroke-width: 1px; }
+#map .tower:hover circle { stroke: #844124; stroke-width: 4px; }
+
 #map .user-dot:hover { r: 5px; stroke: #111; stroke-width: 1px; }
 #map .tower:focus { outline: none; }
-#map .tower:focus rect { stroke: #000080; stroke-width: 3px; }
+#map .tower:focus circle { stroke: #000080; stroke-width: 3px; }
 .legend { font-size: 13px; margin: 7px 0; }
 .green { color: #176b38; }
 .red { color: #bd2424; }
@@ -51,14 +51,30 @@ details p { line-height: 1.5; max-width: 760px; }
   th, td { padding: 7px 3px; }
 }
 
-#map { font-family: Bitter, Georgia, serif; }
+#map { font-family: Verdana, sans-serif; }
 #map .region { cursor: pointer; }
 #map .region:hover .region-border { stroke: #555; stroke-width: 2px; }
 #map .region:focus { outline: none; }
 #map .region:focus .region-border { stroke: #000080; stroke-width: 2px; }
-#map .region-count { fill: #555; font-size: 22px; }
+#map .region-count { fill: #963525; font-size: 17px; }
 #map .region[aria-pressed=true] .region-border { stroke: #844124; stroke-width: 2px; }
 .region-detail { font-size: 13px; min-height: 20px; margin: 5px 0 0; }
 .map-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 
-@media (max-width: 650px) { #map .region-count { font-size: 28px; } }
+
+
+#settings h2 { flex-basis: 100%; margin: 0 0 3px; }
+.map-tools { gap: 10px; margin-bottom: 12px; }
+.display-options { margin-left: auto; font: 12px/1.6 Verdana, sans-serif; }
+.display-options summary { margin: 0; text-align: right; }
+.display-options label { display: block; }
+.tower-list { max-width: 450px; }
+.tower-list summary { margin: 8px 0; font-size: 13px; }
+.towers caption { display: none; }
+#results td:not(:first-child), .towers td:last-child { font: 13px "Lucida Console", monospace; }
+#status { border-left: 3px solid #963525; padding-left: 12px; }
+@media (max-width: 650px) {
+  .display-options { margin-left: 0; }
+  .display-options summary { text-align: left; }
+  #map .region-count { font-size: 21px; }
+}

@@ -38,6 +38,16 @@ let requestNumber = 0,
   loading = false;
 const cache = new Map();
 
+// Register before loading data: the map can be opened while that request runs.
+// A map created in the hidden scenarios view initially has zero-sized bounds.
+document.addEventListener('view-changed', (event) => {
+  if (event.detail !== 'measurements') return;
+  const center = map.getCenter();
+  const zoom = map.getZoom();
+  map.invalidateSize({ pan: false });
+  map.setView(center, zoom, { animate: false, reset: true });
+});
+
 function viewQuery(period = get('measurement-quarter').value) {
   const b = map.getBounds();
   const level = Math.min(16, Math.floor(map.getZoom()) + 4);
@@ -282,6 +292,8 @@ map.on('moveend', () => {
   debounce = setTimeout(loadView, 500);
 });
 get('measurement-area').onchange = () => {
+  map.stop();
+  map.invalidateSize({ pan: false });
   const region = data.regions.find((r) => r.id === get('measurement-area').value);
   if (region.id === 'world')
     map.fitBounds([
@@ -290,10 +302,11 @@ get('measurement-area').onchange = () => {
     ]);
   else {
     const [w, s, e, n] = region.bounds;
-    map.setView([(s + n) / 2, (w + e) / 2], 12);
+    map.setView([(s + n) / 2, (w + e) / 2], 12, { animate: false });
   }
 };
 get('measurement-home').onclick = () => {
+  map.stop();
   get('measurement-area').value = 'world';
   map.fitBounds([
     [-60, -180],
@@ -372,8 +385,4 @@ document.addEventListener('inspect-location', (event) => {
   const r = event.detail;
   map.setView([r.lat, r.lon], 14, { animate: false });
   L.popup().setLatLng([r.lat, r.lon]).setContent(detail(r)).openOn(map);
-});
-
-document.addEventListener('view-changed', (event) => {
-  if (event.detail === 'measurements') map.invalidateSize({ pan: false });
 });

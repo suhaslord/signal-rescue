@@ -50,6 +50,10 @@
         <div id="measurement-map" aria-label="Measured mobile performance world map"></div>
         <p id="measurement-resolution" class="legend"></p>
         <p id="measurement-detail" role="status" hidden></p>
+        <p>
+          <button id="use-area" type="button" disabled>test a scenario here</button>
+          <span id="area-hint" class="legend">Zoom into a local area first.</span>
+        </p>
         <button id="measurement-retry" type="button" hidden>retry loading</button>
         <details id="measurement-options">
           <summary>filters &amp; downloads</summary>
@@ -104,23 +108,40 @@
         </details>
       </section>
       <hr />
+      <section id="area-context" hidden>
+        <h2 id="area-title"></h2>
+        <p id="area-evidence"></p>
+        <p class="legend">
+          Each point is a measured location, not a person. Towers, reach and slots below are
+          assumptions. This tests connectivity, not future speeds.
+        </p>
+        <p>
+          <a href="#measurements">back to measurements</a> ·
+          <a id="area-report" download="area-scenario.csv">download evidence + scenario</a>
+        </p>
+      </section>
       <form id="settings">
         <h2>Scenario</h2>
         <label
           >Layout
           <select id="scenario">
             <option value="town">Town</option>
+            <option value="single">Single tower</option>
             <option value="rural">Rural</option>
             <option value="crowd">Crowded</option>
           </select></label
         >
         <label
-          >Users
+          ><span id="point-label">Users</span>
           <input id="population" type="number" min="20" max="500" step="10" value="180" required
         /></label>
         <label
           >Capacity / tower
           <input id="capacity" type="number" min="1" max="200" value="40" required
+        /></label>
+        <label id="reach-label" hidden
+          >Assumed reach (km)
+          <input id="area-reach" type="number" min="0.1" max="100" step="0.1" value="5" required
         /></label>
         <button type="submit">apply</button>
         <button id="reset-scenario" type="button">reset</button>
@@ -144,13 +165,18 @@
               viewBox="0 0 800 440"
               aria-label="Network map; select a tower to toggle it"
             ></svg>
-            <p class="legend">
+            <p class="legend" id="scenario-legend">
               <span class="red">Shading</span> marks disconnected users. Click an area for counts or
               a tower to switch it.
             </p>
             <p id="region-detail" class="region-detail" role="status" aria-live="polite">
               Select a region to inspect it.
             </p>
+            <div id="point-actions" hidden>
+              <button id="inspect-point" type="button" hidden>show on measured map</button> ·
+              <select id="move-tower" aria-label="Assumed tower to move"></select>
+              <button id="place-tower" type="button">place here</button>
+            </div>
           </div>
           <details class="tower-list">
             <summary>Tower loads</summary>
@@ -265,7 +291,7 @@
             <input id="relay-capacity" type="number" min="1" max="200" value="30" required
           /></label>
           <label
-            >Relay reach
+            >Relay reach<span id="relay-unit"></span>
             <input id="relay-range" type="number" min="25" max="300" value="135" required
           /></label>
           <button type="submit">compare options</button>
@@ -281,7 +307,7 @@
               <tr>
                 <th>Tower</th>
                 <th>Connected</th>
-                <th>Additional users</th>
+                <th id="repair-unit">Additional users</th>
                 <th></th>
               </tr>
             </thead>
@@ -307,7 +333,7 @@
           <button id="apply-relay" type="button">try this relay</button>
           <a id="planning-export" download="signal-rescue-plan.csv">download plan csv</a>
         </div>
-        <p>
+        <p id="planner-limits">
           Simulated reach, not metres. Relay needs power and backhaul. Options use reassignment;
           repairs and relay use the current extension.
         </p>

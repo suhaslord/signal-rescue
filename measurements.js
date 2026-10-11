@@ -77,6 +77,12 @@ function detail(record) {
 }
 function paint() {
   if (loading || !get('measurement-filters').reportValidity()) return;
+  get('use-area').disabled =
+    level !== 16 || !records.some((r) => r.tests >= Number(get('measurement-min-tests').value));
+  get('area-hint').textContent =
+    level === 16
+      ? 'Use the visible measured locations in an outage scenario.'
+      : 'Zoom into a local area first.';
   const metric = get('measurement-metric').value;
   const delay = metric === 'latency';
   const threshold = Number(get('measurement-threshold').value);
@@ -99,7 +105,8 @@ function paint() {
         (key, i) =>
           `<span class="key"><span class="swatch" style="background:${colors[key]}"></span>${ranges[i]}</span>`
       )
-      .join('') + `<span class="key">blank: ${minimum > 1 ? 'no data or filtered' : 'no data'}</span>`;
+      .join('') +
+    `<span class="key">blank: ${minimum > 1 ? 'no data or filtered' : 'no data'}</span>`;
   get('measurement-resolution').textContent =
     level === 16
       ? 'Detailed tiles · about 610 m at the equator. Click a tile for its tests.'
@@ -161,6 +168,7 @@ async function loadView() {
   if (!data) return;
   clearTimeout(debounce);
   const version = ++requestNumber;
+  get('use-area').disabled = true;
   get('measurement-export').removeAttribute('href');
   get('measurement-retry').hidden = true;
   map.closePopup();
@@ -251,19 +259,25 @@ map.on('popupopen', (event) => {
       loadView();
     };
 });
-map.on('autopanstart', () => { popupPanning = true; });
+map.on('autopanstart', () => {
+  popupPanning = true;
+});
 map.on('movestart', () => {
   if (!data || popupPanning) return;
   requestNumber++;
   loading = true;
   records = [];
   cells.clearLayers();
+  get('use-area').disabled = true;
   get('measurement-export').removeAttribute('href');
   get('measurement-compare').open = false;
   get('measurement-summary').textContent = 'Loading measurements for this area…';
 });
 map.on('moveend', () => {
-  if (popupPanning) { popupPanning = false; return; }
+  if (popupPanning) {
+    popupPanning = false;
+    return;
+  }
   clearTimeout(debounce);
   debounce = setTimeout(loadView, 500);
 });
@@ -319,3 +333,43 @@ try {
   get('measurement-summary').textContent = 'Measurements did not load. Please reload.';
   console.error(error);
 }
+
+get('use-area').onclick = () => {
+  if (loading || level !== 16 || !get('measurement-filters').reportValidity()) return;
+  const minimum = Number(get('measurement-min-tests').value);
+  const b = map.getBounds();
+  const bounds = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+  const visible = records.filter(
+    (r) =>
+      r.tests >= minimum &&
+      r.lon >= bounds[0] &&
+      r.lon <= bounds[2] &&
+      r.lat >= bounds[1] &&
+      r.lat <= bounds[3]
+  );
+  if (!visible.length) {
+    get('area-hint').textContent = 'No qualifying locations inside this view.';
+    return;
+  }
+  document.dispatchEvent(
+    new CustomEvent('area-scenario', {
+      detail: {
+        records: visible,
+        bounds,
+        minimum,
+        period: get('measurement-quarter').value,
+        name:
+          get('measurement-area').value === 'world'
+            ? 'Selected area'
+            : get('measurement-area').selectedOptions[0].textContent
+      }
+    })
+  );
+  get('area-context').scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+document.addEventListener('inspect-location', (event) => {
+  get('measurements').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const r = event.detail;
+  map.setView([r.lat, r.lon], 14, { animate: false });
+  L.popup().setLatLng([r.lat, r.lon]).setContent(detail(r)).openOn(map);
+});

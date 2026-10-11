@@ -20,3 +20,11 @@ At zoom 5 and above, `/api/tiles` reads the chosen visible area from the same pu
 Bounds are rounded outward for caching, so counts can include measurements just outside the screen. Regions at the edge of the requested area average only the tiles retrieved in that request. The first query may take several seconds; browser and CDN caches speed up repeated views. Empty results and source failures are shown separately. No tower data is inferred.
 
 Install `requirements.txt` to run the Python data service. `python api_test.py` checks request validation and map projection; `npm test` checks measurement math and simulation.
+
+## Linked area scenarios
+
+“Test a scenario here” imports native level-16 tile centroids in the visible map, after the minimum-test filter. Each cell becomes one analysis point; it is not a person, household, or demand estimate. Up to 500 cells are selected evenly across sorted quadkeys. This avoids treating more tests as more population.
+
+The scenario keeps observed download speeds as tile colors and marks simulated disconnections with a cross. The default tower layouts are hypothetical. Locations can be changed by selecting a measured point and placing an assumed tower there. Reach in kilometres uses a local Mercator scale at the viewport’s centre latitude; circles ignore terrain, buildings, frequencies, interference, carriers, and backhaul. Capacity means slots for analysis points, not measured subscribers. Changing layout or reach regenerates assumed tower positions.
+
+The combined CSV records the quarter, bounds, sample filter, selected evidence, assumed towers, power settings and current per-point assignment. It supports an auditable what-if comparison, not a prediction of real outages, coverage or post-recovery speed. Observed slow locations that become disconnected are counted separately; neither measurement causes nor explains the hypothetical outage.

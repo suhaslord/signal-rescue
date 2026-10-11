@@ -59,8 +59,8 @@
               aria-label="Network map; select a tower to toggle it"
             ></svg>
             <p class="legend">
-              <span class="red">Shaded areas</span> have disconnected users. Select an area for
-              counts; select a tower to switch it.
+              <span class="red">Shading</span> marks disconnected users. Click an area for counts or
+              a tower to switch it.
             </p>
             <p id="region-detail" class="region-detail" role="status" aria-live="polite">
               Select a region to inspect it.
@@ -144,9 +144,7 @@
           <button type="submit">compare options</button>
           <button id="remove-relay" type="button" hidden>remove relay</button>
         </form>
-        <p id="planning-note" role="status">
-          Turn off a tower, then compare repairs, range changes and one temporary relay.
-        </p>
+        <p id="planning-note" role="status">Compare repairs, range and one relay.</p>
         <div id="planning-results" hidden>
           <table>
             <caption>
@@ -183,31 +181,24 @@
           <a id="planning-export" download="signal-rescue-plan.csv">download plan csv</a>
         </div>
         <p>
-          All options use reassignment. Repairs and relay placement use the current range extension.
-          Relay reach is in map units, not metres. Placement tests 144 grid points; it assumes an
-          available power supply and backhaul connection.
+          Simulated reach, not metres. Relay needs power and backhaul. Options use reassignment;
+          repairs and relay use the current extension.
         </p>
       </details>
       <hr />
       <details id="method">
         <summary>method</summary>
         <p>
-          Dots are simulated users. A user needs a tower within range and a free capacity slot. The
-          outage uses nearest-first assignment. Reassignment searches for a maximum matching: it
-          moves existing connections when necessary to make room for another user. Range extension
-          enlarges tower reach by the selected percentage; “both” also reassigns users.
+          Users need coverage and a free tower slot. Reassignment moves connections to fit more
+          users; extension increases simulated reach.
         </p>
         <p>
-          Capacity and range are hard limits. Recovery cannot create coverage when every tower is
-          off. Layouts are repeatable; changing user count or capacity keeps your tower outages.
-          This geometric model does not include interference, terrain, or actual 5G radio protocols.
+          Repairs are ranked by connections restored. Relay search tests 144 locations. Range sweep
+          uses 5% steps. Layouts are repeatable.
         </p>
-        <p>Everything runs locally in your browser. No real coverage data is used.</p>
         <p>
-          This project explores outage recovery motivated by rural connectivity problems in India. A
-          repair ranking estimates connections restored, not repair cost or travel time. Range
-          extension is hypothetical; it does not model the power, interference or regulatory limits
-          of a real radio network.
+          Inspired by rural connectivity in India. No real coverage data, terrain, interference,
+          repair costs or power model. Runs in your browser.
         </p>
       </details>
     </main>

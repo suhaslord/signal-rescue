@@ -53,8 +53,7 @@ function toggleTower(id) {
 function render() {
   plan = null;
   element('planning-results').hidden = true;
-  element('planning-note').textContent =
-    'Compare options for the current outage. Previous plans are cleared when the scenario changes.';
+  element('planning-note').textContent = 'Compare again after changing the scenario.';
   element('remove-relay').hidden = !network.towers.some((tower) => tower.temporary);
   const extension = Number(element('boost').value);
   const healthy = assignUsers({
@@ -345,7 +344,7 @@ element('planning-settings').onsubmit = (event) => {
   plan = { repairs, sweep, range, relay };
   element('planning-results').hidden = false;
   element('planning-note').textContent =
-    `Gains are compared with reassignment at ${extension}% extension: ${recoverNetwork(network, 'combined', extension).connected}/${network.users.length} connected. Options are tested independently; gains cannot be added together.`;
+    `Baseline: ${recoverNetwork(network, 'combined', extension).connected}/${network.users.length}, reassignment + ${extension}% range. Compare options separately; don’t add gains.`;
   element('repair-ranking').innerHTML = repairs.length
     ? repairs
         .map(
@@ -355,7 +354,7 @@ element('planning-settings').onsubmit = (event) => {
         .join('')
     : '<tr><td colspan="4">No failed towers to repair.</td></tr>';
   element('range-advice').textContent =
-    `${range.extension}% is the smallest tested extension that reaches the best result in the 0–100% sweep: ${range.connected}/${network.users.length} connected. ${range.outOfRange} remain out of range; ${range.congested} capacity blocked.`;
+    `Best tested: ${range.connected}/${network.users.length} at ${range.extension}% (smallest matching extension). ${range.outOfRange} out of range; ${range.congested} capacity blocked.`;
   element('range-sweep').innerHTML = sweep
     .map(
       (point) =>
@@ -363,8 +362,8 @@ element('planning-settings').onsubmit = (event) => {
     )
     .join('');
   element('relay-advice').textContent = relay
-    ? `Best tested relay location: (${relay.x}, ${relay.y}). ${relay.capacity} slots, ${relay.range} reach before extension. ${relay.connected}/${network.users.length} connected, ${relay.gain} more than reassignment with the current extension.`
-    : 'A temporary relay is already in this scenario. Remove it to search for a new location.';
+    ? `Relay at (${relay.x}, ${relay.y}): ${relay.connected}/${network.users.length}, +${relay.gain}. ${relay.capacity} slots; ${relay.range} reach before extension.`
+    : 'Remove the current relay to search again.';
   element('apply-relay').disabled = !relay || relay.gain === 0;
   element('planning-export').href =
     'data:text/csv;charset=utf-8,' +

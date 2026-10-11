@@ -1,12 +1,12 @@
 # signal rescue
 
-an outage recovery simulator, motivated by rural connectivity problems in india.
+outage recovery simulation, inspired by rural connectivity in india.
 
-[try it here](https://signal-rescue-suhasaug2011-2968s-projects.vercel.app/)
+[open app](https://signal-rescue-suhasaug2011-2968s-projects.vercel.app/)
 
-turn off a tower and compare recovery options. the planner ranks repairs, checks range changes, and searches 144 locations for one temporary relay. you can apply an option and export the comparison.
+switch off towers. compare repairs, range changes and a temporary relay. apply options or export results.
 
-the layouts are repeatable. range and capacity limit connections. relay placement assumes power and backhaul; this is simulated coverage, not real carrier data or a deployment plan.
+simulated coverage. relay assumes power and backhaul. no real carrier data.
 
-to run locally: `python3 -m http.server 8000`  
-tests: `npm test`
+run: `python3 -m http.server 8000`  
+test: `npm test`

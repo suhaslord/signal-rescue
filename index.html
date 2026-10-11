@@ -87,11 +87,13 @@
         <p class="recovery">
           <button data-strategy="balanced">reassign users</button>
           <button data-strategy="boost">extend range</button>
-          <button data-strategy="combined">both</button> <button data-strategy="none">clear</button>
+          <button data-strategy="combined">both</button>
+          <button data-strategy="none">clear</button>
         </p>
         <p>
           <label
-            >Range extension <input id="boost" type="range" min="0" max="100" step="5" value="35" />
+            >Range extension
+            <input id="boost" type="range" min="0" max="100" step="5" value="35" />
             <output id="boost-value">35%</output></label
           >
         </p>
@@ -99,7 +101,8 @@
       </section>
       <section id="results">
         <h2>
-          Results <a id="export" href="#" download="signal-rescue-results.csv">download csv</a>
+          Results
+          <a id="export" href="#" download="signal-rescue-results.csv">download csv</a>
         </h2>
         <table>
           <thead>
@@ -127,6 +130,64 @@
           </table>
         </details>
       </section>
+      <details id="planner">
+        <summary>plan the next step</summary>
+        <form id="planning-settings">
+          <label
+            >Temporary relay slots
+            <input id="relay-capacity" type="number" min="1" max="200" value="30" required
+          /></label>
+          <label
+            >Relay reach
+            <input id="relay-range" type="number" min="25" max="300" value="135" required
+          /></label>
+          <button type="submit">compare options</button>
+          <button id="remove-relay" type="button" hidden>remove relay</button>
+        </form>
+        <p id="planning-note" role="status">
+          Turn off a tower, then compare repairs, range changes and one temporary relay.
+        </p>
+        <div id="planning-results" hidden>
+          <table>
+            <caption>
+              Repair one tower first
+            </caption>
+            <thead>
+              <tr>
+                <th>Tower</th>
+                <th>Connected</th>
+                <th>Additional users</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="repair-ranking"></tbody>
+          </table>
+          <p id="range-advice"></p>
+          <button id="apply-range" type="button">use this range</button>
+          <details>
+            <summary>range sweep, 0–100%</summary>
+            <table>
+              <thead>
+                <tr>
+                  <th>Extension</th>
+                  <th>Connected</th>
+                  <th>Out of range</th>
+                  <th>Capacity blocked</th>
+                </tr>
+              </thead>
+              <tbody id="range-sweep"></tbody>
+            </table>
+          </details>
+          <p id="relay-advice"></p>
+          <button id="apply-relay" type="button">try this relay</button>
+          <a id="planning-export" download="signal-rescue-plan.csv">download plan csv</a>
+        </div>
+        <p>
+          All options use reassignment. Repairs and relay placement use the current range extension.
+          Relay reach is in map units, not metres. Placement tests 144 grid points; it assumes an
+          available power supply and backhaul connection.
+        </p>
+      </details>
       <hr />
       <details id="method">
         <summary>method</summary>
@@ -142,6 +203,12 @@
           This geometric model does not include interference, terrain, or actual 5G radio protocols.
         </p>
         <p>Everything runs locally in your browser. No real coverage data is used.</p>
+        <p>
+          This project explores outage recovery motivated by rural connectivity problems in India. A
+          repair ranking estimates connections restored, not repair cost or travel time. Range
+          extension is hypothetical; it does not model the power, interference or regulatory limits
+          of a real radio network.
+        </p>
       </details>
     </main>
     <script type="module" src="app.js"></script>

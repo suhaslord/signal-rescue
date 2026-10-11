@@ -1,7 +1,17 @@
-import { makeNetwork, assignUsers, recoverNetwork, resultsCsv } from './model.js';
+import {
+  makeNetwork,
+  assignUsers,
+  recoverNetwork,
+  resultsCsv,
+  rankRepairs,
+  rangeSweep,
+  planRelay,
+  withRelay,
+  planningCsv
+} from './model.js';
 
 const element = (id) => document.getElementById(id);
-const towerName = (id) => `T${id + 1}`;
+const towerName = (id) => (network.towers[id]?.temporary ? 'Relay' : `T${id + 1}`);
 const strategyNames = {
   none: 'No recovery',
   balanced: 'Reassignment',
@@ -16,6 +26,7 @@ let network = makeNetwork();
 let strategy = 'none';
 let current;
 let selectedRegion = null;
+let plan = null;
 
 function coverage(result) {
   return `${((100 * result.connected) / network.users.length).toFixed(1)}%`;
@@ -40,16 +51,29 @@ function toggleTower(id) {
 }
 
 function render() {
+  plan = null;
+  element('planning-results').hidden = true;
+  element('planning-note').textContent =
+    'Compare options for the current outage. Previous plans are cleared when the scenario changes.';
+  element('remove-relay').hidden = !network.towers.some((tower) => tower.temporary);
   const extension = Number(element('boost').value);
   const healthy = assignUsers({
     ...network,
-    towers: network.towers.map((tower) => ({ ...tower, active: true }))
+    towers: network.towers
+      .filter((tower) => !tower.temporary)
+      .map((tower) => ({ ...tower, active: true }))
   });
-  const outage = assignUsers(network);
+  const outage = assignUsers({
+    ...network,
+    towers: network.towers.filter((tower) => !tower.temporary)
+  });
   current = recoverNetwork(network, strategy, extension);
   element('boost-value').value = `${extension}%`;
-  element('recovery-heading').textContent =
-    strategy === 'none' ? 'Recovery' : strategyNames[strategy];
+  element('recovery-heading').textContent = network.towers.some((tower) => tower.temporary)
+    ? `Relay + ${strategyNames[strategy]}`
+    : strategy === 'none'
+      ? 'Recovery'
+      : strategyNames[strategy];
 
   renderMetrics(healthy, outage);
   renderTowerTable();
@@ -72,7 +96,7 @@ function renderMetrics(healthy, outage) {
     .map(
       ([label, value]) => `
     <tr><td>${label}</td><td>${value(healthy)}</td><td>${value(outage)}</td>
-    <td>${strategy === 'none' ? '—' : value(current)}</td></tr>`
+    <td>${strategy === 'none' && !network.towers.some((tower) => tower.temporary) ? '—' : value(current)}</td></tr>`
     )
     .join('');
 }
@@ -114,7 +138,7 @@ function renderStatus(outage) {
   if (current.outOfRange) remaining.push(`${current.outOfRange} out of range`);
   if (current.congested) remaining.push(`${current.congested} waiting for a free slot`);
   let message =
-    strategy === 'none'
+    strategy === 'none' && !network.towers.some((tower) => tower.temporary)
       ? `${current.connected} connected. ${failed} ${failed === 1 ? 'tower' : 'towers'} off.`
       : `${restored} reconnected. ${current.connected} connected in total.`;
   if (remaining.length) message += ` ${remaining.join('; ')}.`;
@@ -211,14 +235,19 @@ function drawMap() {
       aria-label="${towerName(id)} on map" aria-pressed="${active}">
       <title>${towerName(id)}: ${active ? `${current.loads[id]} of ${tower.capacity} slots used. Click to switch off.` : 'off. Click to bring it back.'}</title>
       <circle cx="${x}" cy="${y}" r="20" fill="${active ? '#fffefb' : '#ad3225'}" stroke="${ink}" stroke-width="2"/>
-      <text x="${x}" y="${y + 6}" text-anchor="middle" font-size="18" fill="${active ? '#111' : '#fff'}">${towerName(id)}</text></g>`;
+      <text x="${x}" y="${y + 6}" text-anchor="middle" font-size="${tower.temporary ? 12 : 18}" fill="${active ? '#111' : '#fff'}">${towerName(id)}</text></g>`;
     })
     .join('');
 
   const pattern = `<defs><pattern id="missed" width="7" height="7" patternUnits="userSpaceOnUse">
     <path d="M-1 1L1-1M0 7L7 0M6 8L8 6" stroke="#b95742" stroke-width=".6"/>
   </pattern></defs>`;
-  element('map').innerHTML = pattern + areas + ranges + lines + users + towers;
+  const candidate = plan?.relay;
+  const marker =
+    candidate && candidate.gain > 0
+      ? `<g pointer-events="none"><path d="M${candidate.x - 10} ${candidate.y}h20M${candidate.x} ${candidate.y - 10}v20" stroke="#000080" stroke-width="3"/><text x="${candidate.x + 12}" y="${candidate.y - 12}" font-size="12" fill="#000080">relay candidate</text></g>`
+      : '';
+  element('map').innerHTML = pattern + areas + ranges + lines + users + towers + marker;
   if (selectedRegion !== null) {
     const area = regions[selectedRegion];
     const blocked = area.total - area.connected - area.outOfRange;
@@ -273,12 +302,14 @@ element('example').onclick = () => {
   render();
 };
 element('restore').onclick = () => {
+  network.towers = network.towers.filter((tower) => !tower.temporary);
   network.towers.forEach((tower) => (tower.active = true));
   strategy = 'none';
   render();
 };
 element('reset-scenario').onclick = () => {
   element('settings').reset();
+  element('planning-settings').reset();
   element('boost').value = 35;
   element('links').checked = false;
   element('ranges').checked = false;
@@ -295,3 +326,77 @@ document.querySelectorAll('[data-strategy]').forEach((button) => {
   };
 });
 render();
+
+element('planning-settings').onsubmit = (event) => {
+  event.preventDefault();
+  const extension = Number(element('boost').value);
+  const repairs = rankRepairs(network, extension);
+  const sweep = rangeSweep(network);
+  const bestCoverage = Math.max(...sweep.map((point) => point.connected));
+  const range = sweep.find((point) => point.connected === bestCoverage);
+  const relay = network.towers.some((tower) => tower.temporary)
+    ? null
+    : planRelay(
+        network,
+        Number(element('relay-capacity').value),
+        Number(element('relay-range').value),
+        extension
+      );
+  plan = { repairs, sweep, range, relay };
+  element('planning-results').hidden = false;
+  element('planning-note').textContent =
+    `Gains are compared with reassignment at ${extension}% extension: ${recoverNetwork(network, 'combined', extension).connected}/${network.users.length} connected. Options are tested independently; gains cannot be added together.`;
+  element('repair-ranking').innerHTML = repairs.length
+    ? repairs
+        .map(
+          (repair) =>
+            `<tr><td>${towerName(repair.towerId)}</td><td>${repair.connected}</td><td>+${repair.gain}</td><td><button data-repair="${repair.towerId}">repair</button></td></tr>`
+        )
+        .join('')
+    : '<tr><td colspan="4">No failed towers to repair.</td></tr>';
+  element('range-advice').textContent =
+    `${range.extension}% is the smallest tested extension that reaches the best result in the 0–100% sweep: ${range.connected}/${network.users.length} connected. ${range.outOfRange} remain out of range; ${range.congested} capacity blocked.`;
+  element('range-sweep').innerHTML = sweep
+    .map(
+      (point) =>
+        `<tr><td>${point.extension}%</td><td>${point.connected}</td><td>${point.outOfRange}</td><td>${point.congested}</td></tr>`
+    )
+    .join('');
+  element('relay-advice').textContent = relay
+    ? `Best tested relay location: (${relay.x}, ${relay.y}). ${relay.capacity} slots, ${relay.range} reach before extension. ${relay.connected}/${network.users.length} connected, ${relay.gain} more than reassignment with the current extension.`
+    : 'A temporary relay is already in this scenario. Remove it to search for a new location.';
+  element('apply-relay').disabled = !relay || relay.gain === 0;
+  element('planning-export').href =
+    'data:text/csv;charset=utf-8,' +
+    encodeURIComponent(planningCsv(repairs, sweep, relay, extension));
+  drawMap();
+};
+element('repair-ranking').onclick = (event) => {
+  const button = event.target.closest('[data-repair]');
+  if (!button || !plan) return;
+  network.towers[Number(button.dataset.repair)].active = true;
+  strategy = 'combined';
+  render();
+};
+element('apply-range').onclick = () => {
+  if (!plan) return;
+  element('boost').value = plan.range.extension;
+  strategy = 'combined';
+  render();
+};
+element('apply-relay').onclick = () => {
+  if (!plan?.relay) return;
+  network = withRelay(network, plan.relay);
+  strategy = 'combined';
+  render();
+};
+element('remove-relay').onclick = () => {
+  network.towers = network.towers.filter((tower) => !tower.temporary);
+  render();
+};
+element('relay-capacity').onchange = () => {
+  plan = null;
+  element('planning-results').hidden = true;
+  drawMap();
+};
+element('relay-range').onchange = element('relay-capacity').onchange;

@@ -6,6 +6,16 @@ body {
     16px/1.5 Georgia,
     serif;
 }
+#planning-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: center;
+}
+#planning-results > button,
+#planning-export {
+  margin-right: 12px;
+}
 main {
   max-width: 1000px;
   margin-left: clamp(0px, 3vw, 44px);

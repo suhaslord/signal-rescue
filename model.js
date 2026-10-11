@@ -143,3 +143,116 @@ export function resultsCsv(network, extension = 35) {
   }
   return rows.map((row) => row.join(',')).join('\n') + '\n';
 }
+
+// Compare one repair at a time against the same optimized outage.
+export function rankRepairs(network, extension = 35) {
+  const baseline = recoverNetwork(network, 'combined', extension);
+  return network.towers
+    .filter((tower) => !tower.active)
+    .map((tower) => {
+      const repaired = {
+        ...network,
+        towers: network.towers.map((candidate) => ({
+          ...candidate,
+          active: candidate.active || candidate.id === tower.id
+        }))
+      };
+      const result = recoverNetwork(repaired, 'combined', extension);
+      return {
+        towerId: tower.id,
+        connected: result.connected,
+        gain: result.connected - baseline.connected
+      };
+    })
+    .sort((a, b) => b.gain - a.gain || a.towerId - b.towerId);
+}
+
+export function rangeSweep(network) {
+  return Array.from({ length: 21 }, (_, step) => {
+    const extension = step * 5;
+    const result = recoverNetwork(network, 'combined', extension);
+    return {
+      extension,
+      connected: result.connected,
+      outOfRange: result.outOfRange,
+      congested: result.congested
+    };
+  });
+}
+
+export function withRelay(network, relay) {
+  return {
+    ...network,
+    towers: [
+      ...network.towers,
+      { ...relay, id: network.towers.length, active: true, temporary: true }
+    ]
+  };
+}
+
+export function planRelay(network, capacity = 30, range = 135, extension = 35) {
+  const baseline = recoverNetwork(network, 'combined', extension);
+  const disconnected = network.users.filter((user) => baseline.assignments[user.id] < 0);
+  let best = null;
+  // Search a fixed 50-unit grid, not a claim of an exact geographic optimum.
+  for (let y = 20; y <= 420; y += 50) {
+    for (let x = 25; x <= 775; x += 50) {
+      const relay = { x, y, capacity, range };
+      const result = recoverNetwork(withRelay(network, relay), 'combined', extension);
+      const separation = disconnected.reduce((sum, user) => sum + distance(user, relay), 0);
+      // Equal coverage: prefer proximity to users who lost service.
+      if (
+        !best ||
+        result.connected > best.connected ||
+        (result.connected === best.connected && separation < best.separation)
+      ) {
+        best = {
+          ...relay,
+          separation,
+          connected: result.connected,
+          gain: result.connected - baseline.connected
+        };
+      }
+    }
+  }
+  return best;
+}
+
+export function planningCsv(repairs, sweep, relay, extension = 35) {
+  const rows = [
+    [
+      'action',
+      'setting',
+      'connected',
+      'additional_connections',
+      'relay_capacity',
+      'relay_reach',
+      'range_extension_percent'
+    ]
+  ];
+  repairs.forEach((repair) =>
+    rows.push([
+      'repair',
+      `T${repair.towerId + 1}`,
+      repair.connected,
+      repair.gain,
+      '',
+      '',
+      extension
+    ])
+  );
+  sweep.forEach((point) =>
+    rows.push(['range_percent', point.extension, point.connected, '', '', '', point.extension])
+  );
+  if (relay)
+    rows.push([
+      'temporary_relay',
+      `${relay.x}:${relay.y}`,
+      relay.connected,
+      relay.gain,
+      relay.capacity,
+      relay.range,
+      extension
+    ]);
+  return rows.map((row) => row.join(',')).join('\n') + '\n';
+}

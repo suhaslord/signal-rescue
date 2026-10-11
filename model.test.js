@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeNetwork, assignUsers, recoverNetwork, resultsCsv } from './model.js';
+import {
+  makeNetwork,
+  assignUsers,
+  recoverNetwork,
+  resultsCsv,
+  rankRepairs,
+  rangeSweep,
+  withRelay,
+  planRelay,
+  planningCsv
+} from './model.js';
 
 test('repeatable scenarios and capacity-safe recovery', () => {
   for (const layout of ['town', 'rural', 'crowd']) {
@@ -102,4 +112,70 @@ test('CSV contains the same strategy results and requested extension', () => {
     assert.equal(Number(row[1]), result.connected);
     assert.equal(Number(row[5]), result.multiplier);
   }
+});
+
+test('repair ranking compares independent repairs without changing the outage', () => {
+  const network = makeNetwork('rural', 180, 40);
+  network.towers[1].active = false;
+  network.towers[2].active = false;
+  const before = structuredClone(network);
+  const baseline = recoverNetwork(network, 'combined', 35).connected;
+  const ranked = rankRepairs(network, 35);
+  assert.equal(ranked.length, 2);
+  assert.ok(ranked[0].gain >= ranked[1].gain);
+  for (const repair of ranked) {
+    const copy = structuredClone(network);
+    copy.towers[repair.towerId].active = true;
+    assert.equal(repair.connected, recoverNetwork(copy, 'combined', 35).connected);
+    assert.equal(repair.gain, repair.connected - baseline);
+  }
+  assert.deepEqual(network, before);
+});
+
+test('range sweep stays monotonic and reports capacity limits', () => {
+  const network = makeNetwork('rural', 200, 20);
+  network.towers[2].active = false;
+  const sweep = rangeSweep(network);
+  assert.equal(sweep.length, 21);
+  sweep.forEach((point, index) => {
+    assert.equal(point.extension, index * 5);
+    assert.ok(point.connected <= 80);
+    assert.equal(point.connected + point.outOfRange + point.congested, 200);
+    if (index) assert.ok(point.connected >= sweep[index - 1].connected);
+  });
+});
+
+test('relay search chooses the best tested grid point and leaves inputs intact', () => {
+  const network = makeNetwork('rural', 80, 12);
+  network.towers[2].active = false;
+  const before = structuredClone(network);
+  const relay = planRelay(network, 10, 135, 0);
+  const baseline = recoverNetwork(network, 'combined', 0).connected;
+  assert.equal(relay.gain, relay.connected - baseline);
+  for (let y = 20; y <= 420; y += 50) {
+    for (let x = 25; x <= 775; x += 50) {
+      const result = recoverNetwork(
+        withRelay(network, { x, y, capacity: 10, range: 135 }),
+        'combined',
+        0
+      );
+      assert.ok(result.connected <= relay.connected);
+    }
+  }
+  assert.deepEqual(network, before);
+  const added = withRelay(network, relay);
+  assert.equal(added.towers.length, 6);
+  assert.equal(added.towers[5].id, 5);
+  assert.ok(recoverNetwork(added, 'combined', 0).loads[5] <= 10);
+  const csv = planningCsv(rankRepairs(network, 0), rangeSweep(network), relay);
+  assert.ok(csv.includes(`temporary_relay,${relay.x}:${relay.y},${relay.connected},${relay.gain}`));
+});
+
+test('a relay still needs available capacity, and no outage means no repairs', () => {
+  const network = makeNetwork('town', 20, 40);
+  assert.deepEqual(rankRepairs(network), []);
+  assert.equal(planRelay(network).gain, 0);
+  network.towers.forEach((tower) => (tower.active = false));
+  const relay = planRelay(network, 5, 300, 0);
+  assert.ok(relay.connected > 0 && relay.connected <= 5);
 });

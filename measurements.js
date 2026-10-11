@@ -32,6 +32,7 @@ let data,
   level = 6,
   loadedQuery,
   selected;
+let popupPanning = false;
 let requestNumber = 0,
   debounce,
   loading = false;
@@ -98,7 +99,7 @@ function paint() {
         (key, i) =>
           `<span class="key"><span class="swatch" style="background:${colors[key]}"></span>${ranges[i]}</span>`
       )
-      .join('') + '<span class="key">blank: no data</span>';
+      .join('') + `<span class="key">blank: ${minimum > 1 ? 'no data or filtered' : 'no data'}</span>`;
   get('measurement-resolution').textContent =
     level === 16
       ? 'Detailed tiles · about 610 m at the equator. Click a tile for its tests.'
@@ -134,7 +135,7 @@ function paint() {
       cell
         .bindPopup(
           detail(record) + (level < 16 ? '<br><button class=look-closer>look closer</button>' : ''),
-          { autoPan: false }
+          { autoPan: true }
         )
         .openPopup();
     };
@@ -247,8 +248,9 @@ map.on('popupopen', (event) => {
       map.setView(point, Math.min(14, map.getZoom() + 3));
     };
 });
+map.on('autopanstart', () => { popupPanning = true; });
 map.on('movestart', () => {
-  if (!data) return;
+  if (!data || popupPanning) return;
   requestNumber++;
   loading = true;
   records = [];
@@ -258,6 +260,7 @@ map.on('movestart', () => {
   get('measurement-summary').textContent = 'Loading measurements for this area…';
 });
 map.on('moveend', () => {
+  if (popupPanning) { popupPanning = false; return; }
   clearTimeout(debounce);
   debounce = setTimeout(loadView, 500);
 });

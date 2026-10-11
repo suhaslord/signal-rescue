@@ -11,4 +11,3 @@ HTML, CSS and JavaScript. no backend. the users and towers are simulated, not re
 to run locally: `python3 -m http.server 8000`  
 tests: `npm test`
 
-built with Codex assistance. the font is Bitter; its license is in `Bitter-License.txt`.

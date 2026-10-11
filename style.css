@@ -274,3 +274,51 @@ details p {
     font-size: 21px;
   }
 }
+
+#measurement-settings,
+#power-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+#measurement-map {
+  display: block;
+  width: 100%;
+  border: 1px solid #aaa;
+  font:
+    12px Verdana,
+    sans-serif;
+}
+#measurement-map [data-tile] {
+  cursor: pointer;
+}
+#measurement-map [data-tile]:hover,
+#measurement-map [data-tile]:focus {
+  stroke: #000080;
+  stroke-width: 2px;
+  outline: none;
+}
+#measurement-summary,
+#measurement-detail,
+#power-summary {
+  font-size: 14px;
+}
+
+#measurement-map {
+  height: 460px;
+  background: #e6e6df;
+  font-family: Georgia, serif;
+}
+#measurement-map .leaflet-control-attribution {
+  font-size: 10px;
+}
+#measurement-map .leaflet-popup-content {
+  line-height: 1.5;
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  #measurement-map {
+    height: 350px;
+  }
+}

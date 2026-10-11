@@ -1,12 +1,12 @@
 # signal rescue
 
-outage recovery simulation, inspired by rural connectivity in india.
+mobile measurements and an outage recovery simulator, inspired by rural connectivity in india.
 
 [open app](https://signal-rescue-suhasaug2011-2968s-projects.vercel.app/)
 
-switch off towers. compare repairs, range changes and a temporary relay. apply options or export results.
+explore the world map, compare quarters, or look closer at chittamur and lathrop. then test tower failures, backup power, repairs and a temporary relay.
 
-simulated coverage. relay assumes power and backhaul. no real carrier data.
+[measurement source and limits](DATA.md). simulation uses assumed towers and users.
 
 run: `python3 -m http.server 8000`  
 test: `npm test`

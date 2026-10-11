@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Signal Rescue</title>
     <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="leaflet.css" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -12,11 +13,77 @@
       <header>
         <h1>Signal Rescue</h1>
         <nav>
-          <a href="#network">network</a> &middot; <a href="#results">results</a> &middot;
+          <a href="#measurements">measurements</a> &middot;
+          <a href="#network">simulation</a> &middot; <a href="#results">results</a> &middot;
           <a href="#method">method</a> &middot;
           <a href="https://github.com/suhaslord/signal-rescue">source</a>
         </nav>
       </header>
+      <hr />
+      <section id="measurements">
+        <h2>Mobile measurements</h2>
+        <form id="measurement-settings">
+          <label
+            >Area
+            <select id="measurement-area">
+              <option value="world">World</option>
+              <option value="chittamur">Chittamur area, India</option>
+              <option value="lathrop">Lathrop area, California</option>
+            </select></label
+          >
+          <label
+            >Quarter
+            <select id="measurement-quarter"></select
+          ></label>
+          <label
+            >Show
+            <select id="measurement-metric">
+              <option value="down">Download</option>
+              <option value="up">Upload</option>
+              <option value="latency">Latency</option>
+            </select></label
+          >
+          <label
+            >Min. tests / cell
+            <input id="measurement-min-tests" type="number" min="1" max="1000" value="3" required
+          /></label>
+          <label
+            ><span id="threshold-direction">Flag below</span>
+            <input
+              id="measurement-threshold"
+              type="number"
+              min="0.1"
+              max="1000"
+              step="0.1"
+              value="10"
+              required
+            />
+            <span id="threshold-unit">Mbps</span></label
+          >
+        </form>
+        <p id="measurement-summary" role="status">Loading measured data…</p>
+        <div id="measurement-map" aria-label="Measured mobile performance world map"></div>
+        <p id="measurement-resolution" class="legend"></p>
+        <p id="measurement-detail" role="status">Select a measured tile.</p>
+        <p class="legend">
+          Red: flagged. Green: meets your threshold. Grey: too few tests. Blank: no data, not no
+          service.
+        </p>
+        <details>
+          <summary>compare quarters</summary>
+          <p id="measurement-comparison"></p>
+        </details>
+        <p class="legend">
+          <a href="https://github.com/teamookla/ookla-open-data">Ookla mobile measurements</a>,
+          <span id="measurement-periods"></span>.
+          <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>.
+          <a id="measurement-export" download="mobile-measurements.csv">download csv</a>
+        </p>
+        <p class="legend">
+          Crowdsourced averages, not tower locations or outage records. Simulation below uses
+          assumed towers and users. <a href="DATA.md">data notes</a>
+        </p>
+      </section>
       <hr />
       <form id="settings">
         <h2>Scenario</h2>
@@ -83,6 +150,47 @@
             </table>
           </details>
         </div>
+        <details id="power">
+          <summary>power outage</summary>
+          <form id="power-settings">
+            <label><input id="grid-outage" type="checkbox" /> grid power off</label>
+            <label
+              >Backup / tower
+              <input
+                id="backup-hours"
+                type="number"
+                min="0"
+                max="8"
+                step="0.5"
+                value="2"
+                required
+              />
+              h</label
+            >
+            <label
+              >Elapsed
+              <input id="outage-hours" type="range" min="0" max="8" step="0.5" value="0" /><output
+                id="outage-hours-value"
+                >0 h</output
+              ></label
+            >
+          </form>
+          <p id="power-summary"></p>
+          <details id="power-history" hidden>
+            <summary>8-hour timeline</summary>
+            <table>
+              <thead>
+                <tr>
+                  <th>Hours</th>
+                  <th>Powered towers</th>
+                  <th>Connected</th>
+                </tr>
+              </thead>
+              <tbody id="power-rows"></tbody>
+            </table>
+            <a id="power-export" download="power-outage.csv">download csv</a>
+          </details>
+        </details>
         <h2>Recovery</h2>
         <p class="recovery">
           <button data-strategy="balanced">reassign users</button>
@@ -197,11 +305,13 @@
           uses 5% steps. Layouts are repeatable.
         </p>
         <p>
-          Inspired by rural connectivity in India. No real coverage data, terrain, interference,
-          repair costs or power model. Runs in your browser.
+          Inspired by rural connectivity in India. Simulation uses assumed coverage and backup
+          duration; no terrain, interference or repair costs. Runs in your browser.
         </p>
       </details>
     </main>
     <script type="module" src="app.js"></script>
+    <script src="leaflet.js"></script>
+    <script type="module" src="measurements.js"></script>
   </body>
 </html>

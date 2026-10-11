@@ -7,7 +7,9 @@ import {
   rangeSweep,
   planRelay,
   withRelay,
-  planningCsv
+  planningCsv,
+  powerOutage,
+  powerTimeline
 } from './model.js';
 
 const element = (id) => document.getElementById(id);
@@ -27,6 +29,7 @@ let strategy = 'none';
 let current;
 let selectedRegion = null;
 let plan = null;
+let operating = network;
 
 function coverage(result) {
   return `${((100 * result.connected) / network.users.length).toFixed(1)}%`;
@@ -51,6 +54,13 @@ function toggleTower(id) {
 }
 
 function render() {
+  operating = element('grid-outage').checked
+    ? powerOutage(
+        network,
+        Number(element('outage-hours').value),
+        Number(element('backup-hours').value)
+      )
+    : network;
   plan = null;
   element('planning-results').hidden = true;
   element('planning-note').textContent = 'Compare again after changing the scenario.';
@@ -64,9 +74,9 @@ function render() {
   });
   const outage = assignUsers({
     ...network,
-    towers: network.towers.filter((tower) => !tower.temporary)
+    towers: operating.towers.filter((tower) => !tower.temporary)
   });
-  current = recoverNetwork(network, strategy, extension);
+  current = recoverNetwork(operating, strategy, extension);
   element('boost-value').value = `${extension}%`;
   element('recovery-heading').textContent = network.towers.some((tower) => tower.temporary)
     ? `Relay + ${strategyNames[strategy]}`
@@ -80,7 +90,8 @@ function render() {
   renderStatus(outage);
 
   element('export').href =
-    'data:text/csv;charset=utf-8,' + encodeURIComponent(resultsCsv(network, extension));
+    'data:text/csv;charset=utf-8,' + encodeURIComponent(resultsCsv(operating, extension));
+  renderPower();
   drawMap();
 }
 
@@ -101,7 +112,7 @@ function renderMetrics(healthy, outage) {
 }
 
 function renderTowerTable() {
-  element('tower-controls').innerHTML = network.towers
+  element('tower-controls').innerHTML = operating.towers
     .map(
       (tower) => `
     <tr><td>${towerName(tower.id)}</td><td>
@@ -120,7 +131,7 @@ function renderTowerTable() {
 function renderComparison(extension) {
   element('comparison').innerHTML = ['balanced', 'boost', 'combined']
     .map((key) => {
-      const result = recoverNetwork(network, key, extension);
+      const result = recoverNetwork(operating, key, extension);
       return `<tr><td>${strategyNames[key]}</td><td>${result.connected}</td>
       <td>${coverage(result)}</td><td>${result.multiplier.toFixed(2)}×</td></tr>`;
     })
@@ -131,7 +142,7 @@ function renderComparison(extension) {
 }
 
 function renderStatus(outage) {
-  const failed = network.towers.filter((tower) => !tower.active).length;
+  const failed = operating.towers.filter((tower) => !tower.active).length;
   const restored = current.connected - outage.connected;
   const remaining = [];
   if (current.outOfRange) remaining.push(`${current.outOfRange} out of range`);
@@ -159,7 +170,7 @@ function summarizeRegions() {
     region.total++;
     if (current.assignments[user.id] >= 0) region.connected++;
     else if (
-      !network.towers.some(
+      !operating.towers.some(
         (tower) =>
           tower.active &&
           Math.hypot(user.x - tower.x, user.y - tower.y) <= tower.range * current.multiplier
@@ -192,7 +203,7 @@ function regionMarkup(regions) {
 
 function drawMap() {
   const ranges = element('ranges').checked
-    ? network.towers
+    ? operating.towers
         .filter((tower) => tower.active)
         .map(
           (
@@ -226,7 +237,7 @@ function drawMap() {
         .join('')
     : '';
 
-  const towers = network.towers
+  const towers = operating.towers
     .map((tower) => {
       const { x, y, id, active } = tower;
       const ink = active ? '#333' : '#ad3225';
@@ -302,13 +313,18 @@ element('example').onclick = () => {
 };
 element('restore').onclick = () => {
   network.towers = network.towers.filter((tower) => !tower.temporary);
-  network.towers.forEach((tower) => (tower.active = true));
+  element('grid-outage').checked = false;
+  network.towers.forEach((tower) => {
+    tower.active = true;
+    tower.powerRestored = false;
+  });
   strategy = 'none';
   render();
 };
 element('reset-scenario').onclick = () => {
   element('settings').reset();
   element('planning-settings').reset();
+  element('power-settings').reset();
   element('boost').value = 35;
   element('links').checked = false;
   element('ranges').checked = false;
@@ -329,14 +345,14 @@ render();
 element('planning-settings').onsubmit = (event) => {
   event.preventDefault();
   const extension = Number(element('boost').value);
-  const repairs = rankRepairs(network, extension);
-  const sweep = rangeSweep(network);
+  const repairs = rankRepairs(operating, extension);
+  const sweep = rangeSweep(operating);
   const bestCoverage = Math.max(...sweep.map((point) => point.connected));
   const range = sweep.find((point) => point.connected === bestCoverage);
   const relay = network.towers.some((tower) => tower.temporary)
     ? null
     : planRelay(
-        network,
+        operating,
         Number(element('relay-capacity').value),
         Number(element('relay-range').value),
         extension
@@ -344,7 +360,7 @@ element('planning-settings').onsubmit = (event) => {
   plan = { repairs, sweep, range, relay };
   element('planning-results').hidden = false;
   element('planning-note').textContent =
-    `Baseline: ${recoverNetwork(network, 'combined', extension).connected}/${network.users.length}, reassignment + ${extension}% range. Compare options separately; don’t add gains.`;
+    `Baseline: ${recoverNetwork(operating, 'combined', extension).connected}/${network.users.length}, reassignment + ${extension}% range. Compare options separately; don’t add gains.`;
   element('repair-ranking').innerHTML = repairs.length
     ? repairs
         .map(
@@ -374,6 +390,7 @@ element('repair-ranking').onclick = (event) => {
   const button = event.target.closest('[data-repair]');
   if (!button || !plan) return;
   network.towers[Number(button.dataset.repair)].active = true;
+  network.towers[Number(button.dataset.repair)].powerRestored = element('grid-outage').checked;
   strategy = 'combined';
   render();
 };
@@ -399,3 +416,48 @@ element('relay-capacity').onchange = () => {
   drawMap();
 };
 element('relay-range').onchange = element('relay-capacity').onchange;
+
+function renderPower() {
+  const enabled = element('grid-outage').checked;
+  element('outage-hours-value').value = `${element('outage-hours').value} h`;
+  element('power-summary').textContent = enabled
+    ? `${operating.towers.filter((tower) => tower.active).length} towers powered. Repairs restore power; relays have independent power.`
+    : 'Backup duration is an assumption, not measured tower data.';
+  element('power-history').hidden = !enabled;
+  if (!enabled) return;
+  const points = powerTimeline(
+    network,
+    Number(element('backup-hours').value),
+    strategy,
+    Number(element('boost').value)
+  );
+  element('power-rows').innerHTML = points
+    .map(
+      (point) =>
+        `<tr><td>${point.hours}</td><td>${point.active}</td><td>${point.connected}</td></tr>`
+    )
+    .join('');
+  const csv =
+    'hours,powered_towers,connected,backup_hours\n' +
+    points
+      .map((point) =>
+        [point.hours, point.active, point.connected, element('backup-hours').value].join(',')
+      )
+      .join('\n') +
+    '\n';
+  element('power-export').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+}
+element('power-settings').onsubmit = (event) => {
+  event.preventDefault();
+  if (element('power-settings').reportValidity()) render();
+};
+element('grid-outage').onchange = () => {
+  network.towers.forEach((tower) => {
+    tower.powerRestored = false;
+  });
+  render();
+};
+element('backup-hours').onchange = () => {
+  if (element('power-settings').reportValidity()) render();
+};
+element('outage-hours').oninput = render;

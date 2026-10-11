@@ -190,6 +190,29 @@ export function withRelay(network, relay) {
   };
 }
 
+export function powerOutage(network, elapsedHours, backupHours = 2) {
+  return {
+    ...network,
+    towers: network.towers.map((tower) => ({
+      ...tower,
+      // Temporary relays assume an independent power supply.
+      active: tower.active && (tower.temporary || tower.powerRestored || elapsedHours < backupHours)
+    }))
+  };
+}
+
+export function powerTimeline(network, backupHours, strategy = 'combined', extension = 35) {
+  return Array.from({ length: 17 }, (_, step) => {
+    const hours = step / 2;
+    const working = powerOutage(network, hours, backupHours);
+    return {
+      hours,
+      active: working.towers.filter((tower) => tower.active).length,
+      connected: recoverNetwork(working, strategy, extension).connected
+    };
+  });
+}
+
 export function planRelay(network, capacity = 30, range = 135, extension = 35) {
   const baseline = recoverNetwork(network, 'combined', extension);
   const disconnected = network.users.filter((user) => baseline.assignments[user.id] < 0);

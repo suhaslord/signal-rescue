@@ -11,4 +11,3 @@ the layouts stay repeatable so the recovery options have the same starting point
 to run locally: `python3 -m http.server 8000`  
 tests: `npm test`
 
-built with Codex assistance. the font is Bitter; its license is in `Bitter-License.txt`.

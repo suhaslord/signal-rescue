@@ -372,3 +372,40 @@ details p {
   font-weight: bold;
   padding: 4px 10px;
 }
+
+#focus-label {
+  margin: 10px 0 2px;
+  font-weight: bold;
+}
+#before-after {
+  margin: 12px 0;
+  max-width: 520px;
+}
+#before-after > button {
+  margin-right: 5px;
+}
+#before-after table {
+  margin: 8px 0;
+}
+#next-step {
+  margin: 15px 0;
+  max-width: 740px;
+}
+#next-step p {
+  margin: 7px 0;
+}
+#advanced {
+  border-top: 1px solid #ccc;
+  margin-top: 20px;
+}
+#map .region-count {
+  font-size: 15px;
+  fill: #333;
+}
+#map .region[aria-pressed='true'] .region-border {
+  stroke: #000080;
+  stroke-width: 3px;
+}
+#map .region-count {
+  pointer-events: none;
+}

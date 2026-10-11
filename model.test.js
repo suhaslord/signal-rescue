@@ -197,3 +197,98 @@ test('one-click optimization respects the range budget and chooses the smallest 
     }
   }
 });
+
+test('regional priority matches an exhaustive optimum, without losing total capacity', () => {
+  // Score regional connections first, then total connections. Enumerate every
+  // feasible assignment independently of the augmenting-path implementation.
+  function optimum(network, ids, index = 0, loads = [0, 0, 0]) {
+    if (index === network.users.length) return 0;
+    const user = network.users[index];
+    let best = optimum(network, ids, index + 1, loads);
+    for (const tower of network.towers) {
+      if (
+        !tower.active ||
+        loads[tower.id] >= tower.capacity ||
+        Math.hypot(user.x - tower.x, user.y - tower.y) > tower.range
+      )
+        continue;
+      loads[tower.id]++;
+      best = Math.max(
+        best,
+        1 +
+          (ids.includes(user.id) ? network.users.length + 1 : 0) +
+          optimum(network, ids, index + 1, loads)
+      );
+      loads[tower.id]--;
+    }
+    return best;
+  }
+  for (let seed = 0; seed < 60; seed++) {
+    const network = {
+      towers: [0, 1, 2].map((id) => ({
+        id,
+        x: id * 10,
+        y: 0,
+        range: 5 + (seed % 11),
+        capacity: 1 + (seed % 2),
+        active: seed % 5 !== id
+      })),
+      users: Array.from({ length: 6 }, (_, id) => ({ id, x: (seed * 7 + id * 11) % 31, y: 0 }))
+    };
+    const ids = [4, 5];
+    const result = recoverNetwork(network, 'combined', 0, ids);
+    const focused = ids.filter((id) => result.assignments[id] >= 0).length;
+    assert.equal(focused * 7 + result.connected, optimum(network, ids));
+    assert.equal(result.connected, recoverNetwork(network, 'combined', 0).connected);
+    const choice = optimizeConnections(network, 35, ids);
+    const candidates = rangeSweep(network, ids).filter((p) => p.extension <= 35);
+    const best = candidates.reduce((a, b) =>
+      b.focusConnected * 7 + b.connected > a.focusConnected * 7 + a.connected ? b : a
+    );
+    assert.equal(choice.extension, best.extension);
+    assert.equal(choice.connected, best.connected);
+    assert.equal(choice.focusConnected, best.focusConnected);
+  }
+});
+
+test('regional priority can change who gets a scarce slot, and preserves input IDs', () => {
+  const network = {
+    towers: [{ id: 0, x: 0, y: 0, range: 10, capacity: 1, active: true }],
+    users: [
+      { id: 0, x: 0, y: 0 },
+      { id: 1, x: 1, y: 0 }
+    ]
+  };
+  const original = structuredClone(network);
+  const choice = optimizeConnections(network, 35, [1, 1, -1, 99]);
+  assert.deepEqual(assignUsers(network).assignments, [0, -1]);
+  assert.deepEqual(choice.result.assignments, [-1, 0]);
+  assert.equal(choice.connected, 1);
+  assert.equal(choice.focusConnected, 1);
+  assert.equal(choice.extension, 0);
+  assert.deepEqual(network, original);
+});
+
+test('regional relay search finds the best tested local improvement', () => {
+  const network = makeNetwork('rural', 80, 12);
+  network.towers[2].active = false;
+  const ids = network.users.filter((u) => u.x > 400).map((u) => u.id);
+  const relay = planRelay(network, 10, 135, 0, ids);
+  const score = (r) => ids.filter((id) => r.assignments[id] >= 0).length * 81 + r.connected;
+  const best = recoverNetwork(withRelay(network, relay), 'combined', 0, ids);
+  for (let y = 20; y <= 420; y += 50) {
+    for (let x = 25; x <= 775; x += 50) {
+      assert.ok(
+        score(
+          recoverNetwork(withRelay(network, { x, y, capacity: 10, range: 135 }), 'combined', 0, ids)
+        ) <= score(best)
+      );
+    }
+  }
+  const baseline = recoverNetwork(network, 'combined', 0, ids);
+  assert.equal(
+    relay.focusGain,
+    ids.filter((id) => best.assignments[id] >= 0).length -
+      ids.filter((id) => baseline.assignments[id] >= 0).length
+  );
+});

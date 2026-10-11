@@ -1,12 +1,14 @@
 # signal rescue
 
-mobile measurements and an outage recovery simulator, inspired by rural connectivity in india.
+mobile measurements and a connection planner, inspired by rural connectivity in india.
 
 [open app](https://signal-rescue-suhasaug2011-2968s-projects.vercel.app/)
 
-use the map for local measurements, or click scenarios to test a town, rural route, crowd or single tower. click “test a scenario here” to use those measured locations. click a tower off, then optimize connections. compare a repair or relay if connections are still missing. export the evidence and assumptions together.
+pick a place on the map and click “improve connections here”. choose an area, then improve it. compare before and after, including what changes elsewhere. if connections are still missing, preview a repair or relay. layouts work without a measured area too.
 
-[measurement source and limits](DATA.md). linked scenarios use measured locations, not population. tower positions, reach and capacity are assumed.
+[measurement source and limits](DATA.md). measured points aren't population. towers, capacity and range are assumptions. the model doesn't change real networks or predict speeds.
 
-run the full app with `vercel dev` (Python dependencies in requirements.txt)  
+Codex helped write and revise the implementation. Suhas chose the direction and reviewed the app.
+
+run: `vercel dev` (Python dependencies in requirements.txt)  
 test: `npm test`

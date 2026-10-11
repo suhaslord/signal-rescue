@@ -64,7 +64,7 @@ function towerChoices(network, multiplier) {
   });
 }
 
-export function assignUsers(network, { balanced = false, multiplier = 1 } = {}) {
+export function assignUsers(network, { balanced = false, multiplier = 1, priorityIds = [] } = {}) {
   const choices = towerChoices(network, multiplier);
   // User and tower IDs are array indexes; -1 means no connection.
   const assignments = network.users.map(() => -1);
@@ -93,16 +93,23 @@ export function assignUsers(network, { balanced = false, multiplier = 1 } = {}) 
     return false;
   }
 
-  for (const user of network.users) {
+  // Connect the chosen area first. Later augmenting paths can move those
+  // connections, but cannot discard them to make room for another area.
+  const priority = new Set(priorityIds.filter((id) => Number.isInteger(id) && network.users[id]));
+  const order = [
+    ...priority,
+    ...network.users.map((user) => user.id).filter((id) => !priority.has(id))
+  ];
+  for (const userId of order) {
     if (balanced) {
-      place(user.id, new Set());
+      place(userId, new Set());
     } else {
-      const towerId = choices[user.id].find(
+      const towerId = choices[userId].find(
         (id) => occupants[id].length < network.towers[id].capacity
       );
       if (towerId !== undefined) {
-        occupants[towerId].push(user.id);
-        assignments[user.id] = towerId;
+        occupants[towerId].push(userId);
+        assignments[userId] = towerId;
       }
     }
   }
@@ -120,20 +127,21 @@ export function assignUsers(network, { balanced = false, multiplier = 1 } = {}) 
   };
 }
 
-export function recoverNetwork(network, strategy, extension = 35) {
+export function recoverNetwork(network, strategy, extension = 35, priorityIds = []) {
   const multiplier = 1 + extension / 100;
-  if (strategy === 'balanced') return assignUsers(network, { balanced: true });
+  if (strategy === 'balanced') return assignUsers(network, { balanced: true, priorityIds });
   if (strategy === 'boost') return assignUsers(network, { multiplier });
-  if (strategy === 'combined') return assignUsers(network, { balanced: true, multiplier });
+  if (strategy === 'combined')
+    return assignUsers(network, { balanced: true, multiplier, priorityIds });
   return assignUsers(network);
 }
 
-export function resultsCsv(network, extension = 35) {
+export function resultsCsv(network, extension = 35, priorityIds = []) {
   const rows = [
     ['strategy', 'connected', 'users', 'out_of_range', 'capacity_blocked', 'range_multiplier']
   ];
   for (const strategy of ['none', 'balanced', 'boost', 'combined']) {
-    const result = recoverNetwork(network, strategy, extension);
+    const result = recoverNetwork(network, strategy, extension, priorityIds);
     rows.push([
       strategy,
       result.connected,
@@ -147,8 +155,8 @@ export function resultsCsv(network, extension = 35) {
 }
 
 // Compare one repair at a time against the same optimized outage.
-export function rankRepairs(network, extension = 35) {
-  const baseline = recoverNetwork(network, 'combined', extension);
+export function rankRepairs(network, extension = 35, priorityIds = []) {
+  const baseline = recoverNetwork(network, 'combined', extension, priorityIds);
   return network.towers
     .filter((tower) => !tower.active)
     .map((tower) => {
@@ -159,25 +167,27 @@ export function rankRepairs(network, extension = 35) {
           active: candidate.active || candidate.id === tower.id
         }))
       };
-      const result = recoverNetwork(repaired, 'combined', extension);
+      const result = recoverNetwork(repaired, 'combined', extension, priorityIds);
       return {
         towerId: tower.id,
         connected: result.connected,
-        gain: result.connected - baseline.connected
+        gain: result.connected - baseline.connected,
+        focusGain: countFocus(result, priorityIds) - countFocus(baseline, priorityIds)
       };
     })
-    .sort((a, b) => b.gain - a.gain || a.towerId - b.towerId);
+    .sort((a, b) => b.focusGain - a.focusGain || b.gain - a.gain || a.towerId - b.towerId);
 }
 
-export function rangeSweep(network) {
+export function rangeSweep(network, priorityIds = []) {
   return Array.from({ length: 21 }, (_, step) => {
     const extension = step * 5;
-    const result = recoverNetwork(network, 'combined', extension);
+    const result = recoverNetwork(network, 'combined', extension, priorityIds);
     return {
       extension,
       connected: result.connected,
       outOfRange: result.outOfRange,
-      congested: result.congested
+      congested: result.congested,
+      focusConnected: countFocus(result, priorityIds)
     };
   });
 }
@@ -203,39 +213,51 @@ export function powerOutage(network, elapsedHours, backupHours = 2) {
   };
 }
 
-export function powerTimeline(network, backupHours, strategy = 'combined', extension = 35) {
+export function powerTimeline(
+  network,
+  backupHours,
+  strategy = 'combined',
+  extension = 35,
+  priorityIds = []
+) {
   return Array.from({ length: 17 }, (_, step) => {
     const hours = step / 2;
     const working = powerOutage(network, hours, backupHours);
     return {
       hours,
       active: working.towers.filter((tower) => tower.active).length,
-      connected: recoverNetwork(working, strategy, extension).connected
+      connected: recoverNetwork(working, strategy, extension, priorityIds).connected
     };
   });
 }
 
-export function planRelay(network, capacity = 30, range = 135, extension = 35) {
-  const baseline = recoverNetwork(network, 'combined', extension);
+export function planRelay(network, capacity = 30, range = 135, extension = 35, priorityIds = []) {
+  const baseline = recoverNetwork(network, 'combined', extension, priorityIds);
   const disconnected = network.users.filter((user) => baseline.assignments[user.id] < 0);
   let best = null;
   // Search a fixed 50-unit grid, not a claim of an exact geographic optimum.
   for (let y = 20; y <= 420; y += 50) {
     for (let x = 25; x <= 775; x += 50) {
       const relay = { x, y, capacity, range };
-      const result = recoverNetwork(withRelay(network, relay), 'combined', extension);
+      const result = recoverNetwork(withRelay(network, relay), 'combined', extension, priorityIds);
+      const focusConnected = countFocus(result, priorityIds);
       const separation = disconnected.reduce((sum, user) => sum + distance(user, relay), 0);
       // Equal coverage: prefer proximity to users who lost service.
       if (
         !best ||
-        result.connected > best.connected ||
-        (result.connected === best.connected && separation < best.separation)
+        focusConnected > best.focusConnected ||
+        (focusConnected === best.focusConnected && result.connected > best.connected) ||
+        (focusConnected === best.focusConnected &&
+          result.connected === best.connected &&
+          separation < best.separation)
       ) {
         best = {
           ...relay,
           separation,
           connected: result.connected,
-          gain: result.connected - baseline.connected
+          gain: result.connected - baseline.connected,
+          focusConnected,
+          focusGain: focusConnected - countFocus(baseline, priorityIds)
         };
       }
     }
@@ -283,13 +305,22 @@ export function planningCsv(repairs, sweep, relay, extension = 35) {
 }
 
 // Within the allowed range increase, prefer the least extension with best connectivity.
-export function optimizeConnections(network, maximumExtension = 35) {
+export function countFocus(result, ids) {
+  return [...new Set(ids)].filter((id) => result.assignments[id] >= 0).length;
+}
+
+export function optimizeConnections(network, maximumExtension = 35, priorityIds = []) {
   const limit = Math.max(0, Math.min(100, Number(maximumExtension) || 0));
-  const candidates = rangeSweep(network).filter((point) => point.extension <= limit);
-  const best = candidates.reduce((a, b) => (b.connected > a.connected ? b : a));
+  const candidates = rangeSweep(network, priorityIds).filter((point) => point.extension <= limit);
+  const best = candidates.reduce((a, b) =>
+    b.focusConnected > a.focusConnected ||
+    (b.focusConnected === a.focusConnected && b.connected > a.connected)
+      ? b
+      : a
+  );
   return {
     ...best,
-    result: recoverNetwork(network, 'combined', best.extension),
+    result: recoverNetwork(network, 'combined', best.extension, priorityIds),
     before: assignUsers(network).connected
   };
 }

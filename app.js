@@ -1,21 +1,21 @@
-import { areaScenario, scenarioReport } from './area-scenario.js';
+import { makeArea, areaCsv } from './area.js';
 import {
   makeNetwork,
-  assignUsers,
-  recoverNetwork,
+  connectUsers,
+  recover,
   resultsCsv,
   rankRepairs,
   rangeSweep,
-  planRelay,
+  findRelay,
   withRelay,
-  planningCsv,
+  planCsv,
   powerOutage,
   powerTimeline,
-  optimizeConnections,
-  countFocus
+  improveConnections,
+  countConnected
 } from './model.js';
 
-const element = (id) => document.getElementById(id);
+const get = (id) => document.getElementById(id);
 const towerName = (id) => (network.towers[id]?.temporary ? 'Relay' : `T${id + 1}`);
 const strategyNames = {
   none: 'No recovery',
@@ -32,7 +32,7 @@ let strategy = 'none';
 let current;
 let selectedRegion = null;
 let plan = null;
-let operating = network;
+let working = network;
 let areaContext = null;
 let selectedPoint = null;
 let priorityIds = [];
@@ -61,22 +61,22 @@ function coverage(result) {
 }
 
 function updateSettings() {
-  if (!element('settings').reportValidity()) return;
+  if (!get('settings').reportValidity()) return;
   // Editing the scenario should not silently bring failed towers back online.
   const previous = network;
   const towerStates = network.towers.map((tower) => tower.active);
   network = areaContext
-    ? areaScenario(
+    ? makeArea(
         areaContext.records,
         areaContext.bounds,
-        Number(element('capacity').value),
-        element('scenario').value,
-        Number(element('area-reach').value)
+        Number(get('capacity').value),
+        get('scenario').value,
+        Number(get('area-reach').value)
       )
     : makeNetwork(
-        element('scenario').value,
-        Number(element('population').value),
-        Number(element('capacity').value)
+        get('scenario').value,
+        Number(get('population').value),
+        Number(get('capacity').value)
       );
   network.towers.forEach((tower, id) => {
     tower.active = towerStates[id] ?? true;
@@ -102,53 +102,40 @@ function render({ keepComparison = false } = {}) {
     nextStep = null;
     previewNetwork = null;
   }
-  element('before-after').hidden = !comparison;
-  element('next-step').hidden = !nextStep;
-  element('whole-area').hidden = selectedRegion === null;
-  element('focus-label').textContent =
-    selectedRegion === null ? 'Focus: whole area' : `Focus: ${regionNames[selectedRegion]} area`;
-  element('optimize').disabled = focusIds().length === 0;
-  element('optimize').textContent =
+  get('before-after').hidden = !comparison;
+  get('next-step').hidden = !nextStep;
+  get('whole-area').hidden = selectedRegion === null;
+  get('focus-label').textContent =
+    selectedRegion === null ? 'Area: all' : `Area: ${regionNames[selectedRegion]}`;
+  get('optimize').disabled = focusIds().length === 0;
+  get('optimize').textContent =
     selectedRegion === null ? 'improve connections' : 'improve this area';
-  operating = element('grid-outage').checked
-    ? powerOutage(
-        network,
-        Number(element('outage-hours').value),
-        Number(element('backup-hours').value)
-      )
+  working = get('grid-outage').checked
+    ? powerOutage(network, Number(get('outage-hours').value), Number(get('backup-hours').value))
     : network;
   plan = null;
-  element('planning-results').hidden = true;
-  element('planning-note').textContent = 'Compare again after changing the scenario.';
-  element('optimization-summary').textContent =
-    'Connections below are simulated. Click improve to compare before and after.';
+  get('planning-results').hidden = true;
+  get('planning-note').textContent = 'Compare again after changing the scenario.';
+  get('optimization-summary').textContent = 'Click improve to compare connections.';
   document.querySelectorAll('[data-layout]').forEach((button) => {
-    button.setAttribute('aria-pressed', button.dataset.layout === element('scenario').value);
+    button.setAttribute('aria-pressed', button.dataset.layout === get('scenario').value);
     button.disabled = !!areaContext && button.dataset.layout === 'crowd';
   });
-  element('scenario-caption').textContent = areaContext
-    ? 'Using measured locations from your selected area; towers are assumed.'
-    : {
-        town: 'Five towers across a town.',
-        rural: 'Five towers along a rural route.',
-        single: 'One tower serving nearby users.',
-        crowd: 'Most users gathered near the centre.'
-      }[element('scenario').value];
-  element('remove-relay').hidden = !network.towers.some((tower) => tower.temporary);
-  const extension = Number(element('boost').value);
-  const healthy = assignUsers({
+  get('remove-relay').hidden = !network.towers.some((tower) => tower.temporary);
+  const extension = Number(get('boost').value);
+  const healthy = connectUsers({
     ...network,
     towers: network.towers
       .filter((tower) => !tower.temporary)
       .map((tower) => ({ ...tower, active: true }))
   });
-  const outage = assignUsers({
+  const outage = connectUsers({
     ...network,
-    towers: operating.towers.filter((tower) => !tower.temporary)
+    towers: working.towers.filter((tower) => !tower.temporary)
   });
-  current = recoverNetwork(operating, strategy, extension, priorityIds);
-  element('boost-value').value = `${extension}%`;
-  element('recovery-heading').textContent = network.towers.some((tower) => tower.temporary)
+  current = recover(working, strategy, extension, priorityIds);
+  get('boost-value').value = `${extension}%`;
+  get('recovery-heading').textContent = network.towers.some((tower) => tower.temporary)
     ? `Relay + ${strategyNames[strategy]}`
     : strategy === 'none'
       ? 'Recovery'
@@ -159,9 +146,9 @@ function render({ keepComparison = false } = {}) {
   renderComparison(extension);
   renderStatus(outage);
 
-  element('export').href =
+  get('export').href =
     'data:text/csv;charset=utf-8,' +
-    encodeURIComponent(resultsCsv(operating, extension, priorityIds));
+    encodeURIComponent(resultsCsv(working, extension, priorityIds));
   renderPower();
   drawMap();
   renderAreaContext();
@@ -177,7 +164,7 @@ function renderMetrics(healthy, outage) {
     ['Out of range', (result) => result.outOfRange],
     ['Capacity blocked', (result) => result.congested]
   ];
-  element('metrics').innerHTML = metrics
+  get('metrics').innerHTML = metrics
     .map(
       ([label, value]) => `
     <tr><td>${label}</td><td>${value(healthy)}</td><td>${value(outage)}</td>
@@ -187,7 +174,7 @@ function renderMetrics(healthy, outage) {
 }
 
 function renderTowerTable() {
-  element('tower-controls').innerHTML = operating.towers
+  get('tower-controls').innerHTML = working.towers
     .map(
       (tower) => `
     <tr><td>${towerName(tower.id)}</td><td>
@@ -196,7 +183,7 @@ function renderTowerTable() {
     </td><td>${current.loads[tower.id]} / ${tower.capacity}</td></tr>`
     )
     .join('');
-  element('tower-controls')
+  get('tower-controls')
     .querySelectorAll('button')
     .forEach((button) => {
       button.onclick = () => toggleTower(Number(button.dataset.tower));
@@ -204,9 +191,9 @@ function renderTowerTable() {
 }
 
 function renderComparison(extension) {
-  element('comparison').innerHTML = ['balanced', 'boost', 'combined']
+  get('comparison').innerHTML = ['balanced', 'boost', 'combined']
     .map((key) => {
-      const result = recoverNetwork(operating, key, extension, priorityIds);
+      const result = recover(working, key, extension, priorityIds);
       return `<tr><td>${strategyNames[key]}</td><td>${result.connected}</td>
       <td>${coverage(result)}</td><td>${result.multiplier.toFixed(2)}×</td></tr>`;
     })
@@ -217,7 +204,7 @@ function renderComparison(extension) {
 }
 
 function renderStatus(outage) {
-  const failed = operating.towers.filter((tower) => !tower.active).length;
+  const failed = working.towers.filter((tower) => !tower.active).length;
   const restored = current.connected - outage.connected;
   const remaining = [];
   if (current.outOfRange) remaining.push(`${current.outOfRange} out of range`);
@@ -229,11 +216,11 @@ function renderStatus(outage) {
   if (remaining.length) message += ` ${remaining.join('; ')}.`;
   if (failed === network.towers.length)
     message = 'All towers are off. Even the best algorithm needs a tower.';
-  element('status').textContent = message;
+  get('status').textContent = message;
 }
 
 function summarizeRegions(result = mapResult()) {
-  const shownNetwork = comparison && viewBefore ? comparison.network : operating;
+  const shownNetwork = comparison && viewBefore ? comparison.network : working;
   const regions = Array.from({ length: mapGrid.columns * mapGrid.rows }, () => ({
     total: 0,
     connected: 0,
@@ -277,8 +264,8 @@ function regionMarkup(regions) {
 
 function drawMap() {
   const shown = mapResult();
-  const shownNetwork = comparison && viewBefore ? comparison.network : operating;
-  const ranges = element('ranges').checked
+  const shownNetwork = comparison && viewBefore ? comparison.network : working;
+  const ranges = get('ranges').checked
     ? shownNetwork.towers
         .filter((tower) => tower.active)
         .map(
@@ -288,7 +275,7 @@ function drawMap() {
         .join('')
     : '';
 
-  const lines = element('links').checked
+  const lines = get('links').checked
     ? network.users
         .map((user) => {
           const tower = shownNetwork.towers[shown.assignments[user.id]];
@@ -301,7 +288,7 @@ function drawMap() {
   const regions = summarizeRegions();
   const areas = regionMarkup(regions) + (areaContext ? measuredMarkup() : '');
 
-  const users = element('users').checked
+  const users = get('users').checked
     ? network.users
         .map((user) => {
           const assigned = shown.assignments[user.id];
@@ -331,23 +318,23 @@ function drawMap() {
     candidate && candidate.gain > 0
       ? `<g pointer-events="none"><path d="M${candidate.x - 10} ${candidate.y}h20M${candidate.x} ${candidate.y - 10}v20" stroke="#000080" stroke-width="3"/><text x="${candidate.x + 12}" y="${Math.min(430, candidate.y + 18)}" font-size="12" fill="#000080">relay candidate</text></g>`
       : '';
-  element('map').innerHTML = pattern + areas + ranges + lines + users + towers + marker;
+  get('map').innerHTML = pattern + areas + ranges + lines + users + towers + marker;
   if (areaContext) {
     const point = network.users[selectedPoint];
-    element('region-detail').textContent = point
+    get('region-detail').textContent = point
       ? `Measured ${(point.record.downKbps / 1000).toFixed(1)} Mbps download · ${point.record.tests} tests. Scenario: ${shown.assignments[point.id] >= 0 ? 'connected to T' + (shown.assignments[point.id] + 1) : 'disconnected'}. ${point.record.lat.toFixed(4)}, ${point.record.lon.toFixed(4)}.`
       : selectedRegion !== null
         ? `${regionNames[selectedRegion]} area: ${regions[selectedRegion].connected}/${regions[selectedRegion].total} connected. Select a point for its measured speed.`
         : 'Select an area to focus, or a point for its measured speed.';
-    element('point-actions').hidden = !point;
-    element('inspect-point').hidden = !point;
+    get('point-actions').hidden = !point;
+    get('inspect-point').hidden = !point;
   } else if (selectedRegion !== null) {
     const area = regions[selectedRegion];
     const blocked = area.total - area.connected - area.outOfRange;
-    element('region-detail').textContent =
+    get('region-detail').textContent =
       `${regionNames[selectedRegion]} area: ${area.connected}/${area.total} connected. ${area.outOfRange} out of range; ${blocked} capacity blocked.`;
   } else {
-    element('region-detail').textContent = 'Click a quarter of the map to improve that area first.';
+    get('region-detail').textContent = 'Click a quarter of the map to improve that area first.';
   }
 }
 
@@ -367,11 +354,11 @@ function activateMapItem(item) {
   }
 }
 
-element('map').onclick = (event) => {
+get('map').onclick = (event) => {
   const item = event.target.closest('[data-tower], [data-region], [data-point]');
   if (item) activateMapItem(item);
 };
-element('map').onkeydown = (event) => {
+get('map').onkeydown = (event) => {
   if (event.key !== 'Enter' && event.key !== ' ') return;
   const item = event.target.closest('[data-tower], [data-region], [data-point]');
   if (!item) return;
@@ -384,30 +371,30 @@ element('map').onkeydown = (event) => {
         : `[data-region="${item.dataset.region}"]`;
   activateMapItem(item);
   // Rendering replaces the focused SVG group.
-  element('map').querySelector(selector).focus();
+  get('map').querySelector(selector).focus();
 };
 
-element('settings').onsubmit = (event) => {
+get('settings').onsubmit = (event) => {
   event.preventDefault();
   updateSettings();
 };
-element('scenario').onchange = updateSettings;
-element('population').onchange = updateSettings;
-element('capacity').onchange = updateSettings;
-element('links').onchange = drawMap;
-element('ranges').onchange = drawMap;
-element('users').onchange = drawMap;
-element('boost').oninput = render;
-element('example').onclick = () => {
+get('scenario').onchange = updateSettings;
+get('population').onchange = updateSettings;
+get('capacity').onchange = updateSettings;
+get('links').onchange = drawMap;
+get('ranges').onchange = drawMap;
+get('users').onchange = drawMap;
+get('boost').oninput = render;
+get('example').onclick = () => {
   network.towers.forEach(
     (tower) => (tower.active = tower.id !== (network.towers.length === 1 ? 0 : 2))
   );
   strategy = 'none';
   render();
 };
-element('restore').onclick = () => {
+get('restore').onclick = () => {
   network.towers = network.towers.filter((tower) => !tower.temporary);
-  element('grid-outage').checked = false;
+  get('grid-outage').checked = false;
   network.towers.forEach((tower) => {
     tower.active = true;
     tower.powerRestored = false;
@@ -415,17 +402,17 @@ element('restore').onclick = () => {
   strategy = 'none';
   render();
 };
-element('reset-scenario').onclick = () => {
+get('reset-scenario').onclick = () => {
   areaContext = null;
   selectedPoint = null;
-  element('settings').reset();
-  element('planning-settings').reset();
-  element('power-settings').reset();
-  element('boost').value = 35;
-  element('optimization-limit').value = 35;
-  element('links').checked = false;
-  element('ranges').checked = false;
-  element('users').checked = false;
+  get('settings').reset();
+  get('planning-settings').reset();
+  get('power-settings').reset();
+  get('boost').value = 35;
+  get('optimization-limit').value = 35;
+  get('links').checked = false;
+  get('ranges').checked = false;
+  get('users').checked = false;
   selectedRegion = null;
   network = makeNetwork();
   strategy = 'none';
@@ -439,11 +426,11 @@ document.querySelectorAll('[data-strategy]').forEach((button) => {
 });
 render();
 
-element('planning-settings').onsubmit = (event) => {
+get('planning-settings').onsubmit = (event) => {
   event.preventDefault();
-  const extension = Number(element('boost').value);
-  const repairs = rankRepairs(operating, extension, priorityIds);
-  const sweep = rangeSweep(operating, priorityIds);
+  const extension = Number(get('boost').value);
+  const repairs = rankRepairs(working, extension, priorityIds);
+  const sweep = rangeSweep(working, priorityIds);
   const range = sweep.reduce((a, b) =>
     b.focusConnected > a.focusConnected ||
     (b.focusConnected === a.focusConnected && b.connected > a.connected)
@@ -452,18 +439,18 @@ element('planning-settings').onsubmit = (event) => {
   );
   const relay = network.towers.some((tower) => tower.temporary)
     ? null
-    : planRelay(
-        operating,
-        Number(element('relay-capacity').value),
-        Number(element('relay-range').value) * (areaContext ? network.geography.pixelsPerKm : 1),
+    : findRelay(
+        working,
+        Number(get('relay-capacity').value),
+        Number(get('relay-range').value) * (areaContext ? network.geography.pixelsPerKm : 1),
         extension,
         priorityIds
       );
   plan = { repairs, sweep, range, relay };
-  element('planning-results').hidden = false;
-  element('planning-note').textContent =
-    `Baseline: ${recoverNetwork(operating, 'combined', extension, priorityIds).connected}/${network.users.length}, reassignment + ${extension}% range. Compare options separately; don’t add gains.`;
-  element('repair-ranking').innerHTML = repairs.length
+  get('planning-results').hidden = false;
+  get('planning-note').textContent =
+    `Baseline: ${recover(working, 'combined', extension, priorityIds).connected}/${network.users.length}, reassignment + ${extension}% range. Compare options separately; don’t add gains.`;
+  get('repair-ranking').innerHTML = repairs.length
     ? repairs
         .map(
           (repair) =>
@@ -471,70 +458,69 @@ element('planning-settings').onsubmit = (event) => {
         )
         .join('')
     : '<tr><td colspan="4">No failed towers to repair.</td></tr>';
-  element('range-advice').textContent =
+  get('range-advice').textContent =
     `Best tested: ${range.connected}/${network.users.length} at ${range.extension}% (smallest matching extension). ${range.outOfRange} out of range; ${range.congested} capacity blocked.`;
-  element('range-sweep').innerHTML = sweep
+  get('range-sweep').innerHTML = sweep
     .map(
       (point) =>
         `<tr><td>${point.extension}%</td><td>${point.connected}</td><td>${point.outOfRange}</td><td>${point.congested}</td></tr>`
     )
     .join('');
-  element('relay-advice').textContent = relay
+  get('relay-advice').textContent = relay
     ? `Relay at (${relay.x}, ${relay.y}): ${relay.connected}/${network.users.length}, +${relay.gain}. ${relay.capacity} slots; ${areaContext ? (relay.range / network.geography.pixelsPerKm).toFixed(1) + ' km assumed reach' : relay.range + ' reach'} before extension.`
     : 'Remove the current relay to search again.';
-  element('apply-relay').disabled = !relay || relay.gain === 0;
-  element('planning-export').href =
-    'data:text/csv;charset=utf-8,' +
-    encodeURIComponent(planningCsv(repairs, sweep, relay, extension));
+  get('apply-relay').disabled = !relay || relay.gain === 0;
+  get('planning-export').href =
+    'data:text/csv;charset=utf-8,' + encodeURIComponent(planCsv(repairs, sweep, relay, extension));
   drawMap();
 };
-element('repair-ranking').onclick = (event) => {
+get('repair-ranking').onclick = (event) => {
   const button = event.target.closest('[data-repair]');
   if (!button || !plan) return;
   network.towers[Number(button.dataset.repair)].active = true;
-  network.towers[Number(button.dataset.repair)].powerRestored = element('grid-outage').checked;
+  network.towers[Number(button.dataset.repair)].powerRestored = get('grid-outage').checked;
   strategy = 'combined';
   render();
 };
-element('apply-range').onclick = () => {
+get('apply-range').onclick = () => {
   if (!plan) return;
-  element('boost').value = plan.range.extension;
+  get('boost').value = plan.range.extension;
   strategy = 'combined';
   render();
 };
-element('apply-relay').onclick = () => {
+get('apply-relay').onclick = () => {
   if (!plan?.relay) return;
   network = withRelay(network, plan.relay);
   strategy = 'combined';
   render();
 };
-element('remove-relay').onclick = () => {
+get('remove-relay').onclick = () => {
   network.towers = network.towers.filter((tower) => !tower.temporary);
   render();
 };
-element('relay-capacity').onchange = () => {
+get('relay-capacity').onchange = () => {
   plan = null;
-  element('planning-results').hidden = true;
+  get('planning-results').hidden = true;
   drawMap();
 };
-element('relay-range').onchange = element('relay-capacity').onchange;
+get('relay-range').onchange = get('relay-capacity').onchange;
 
 function renderPower() {
-  const enabled = element('grid-outage').checked;
-  element('outage-hours-value').value = `${element('outage-hours').value} h`;
-  element('power-summary').textContent = enabled
-    ? `${operating.towers.filter((tower) => tower.active).length} towers powered. Repairs restore power; relays have independent power.`
+  const enabled = get('grid-outage').checked;
+  get('outage-hours-value').value = `${get('outage-hours').value} h`;
+  get('power-summary').textContent = enabled
+    ? `${working.towers.filter((tower) => tower.active).length} towers powered. Repairs restore power; relays have independent power.`
     : 'Backup duration is an assumption, not measured tower data.';
-  element('power-history').hidden = !enabled;
+  get('power-history').hidden = !enabled;
   if (!enabled) return;
   const points = powerTimeline(
     network,
-    Number(element('backup-hours').value),
+    Number(get('backup-hours').value),
     strategy,
-    Number(element('boost').value),
+    Number(get('boost').value),
     priorityIds
   );
-  element('power-rows').innerHTML = points
+  get('power-rows').innerHTML = points
     .map(
       (point) =>
         `<tr><td>${point.hours}</td><td>${point.active}</td><td>${point.connected}</td></tr>`
@@ -544,26 +530,26 @@ function renderPower() {
     'hours,powered_towers,connected,backup_hours\n' +
     points
       .map((point) =>
-        [point.hours, point.active, point.connected, element('backup-hours').value].join(',')
+        [point.hours, point.active, point.connected, get('backup-hours').value].join(',')
       )
       .join('\n') +
     '\n';
-  element('power-export').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  get('power-export').href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
 }
-element('power-settings').onsubmit = (event) => {
+get('power-settings').onsubmit = (event) => {
   event.preventDefault();
-  if (element('power-settings').reportValidity()) render();
+  if (get('power-settings').reportValidity()) render();
 };
-element('grid-outage').onchange = () => {
+get('grid-outage').onchange = () => {
   network.towers.forEach((tower) => {
     tower.powerRestored = false;
   });
   render();
 };
-element('backup-hours').onchange = () => {
-  if (element('power-settings').reportValidity()) render();
+get('backup-hours').onchange = () => {
+  if (get('power-settings').reportValidity()) render();
 };
-element('outage-hours').oninput = render;
+get('outage-hours').oninput = render;
 
 function measuredMarkup() {
   const shown = mapResult();
@@ -593,90 +579,89 @@ function measuredMarkup() {
   );
 }
 function renderAreaContext() {
-  element('area-context').hidden = !areaContext;
-  element('reach-label').hidden = !areaContext;
-  element('population').disabled = !!areaContext;
-  element('scenario').querySelector('option[value=crowd]').disabled = !!areaContext;
-  element('repair-unit').textContent = areaContext ? 'Additional locations' : 'Additional users';
-  element('relay-unit').textContent = areaContext ? ' (km)' : '';
-  element('relay-range').min = areaContext ? '0.1' : '25';
-  element('relay-range').max = areaContext ? '100' : '300';
-  element('relay-range').step = areaContext ? '0.1' : '1';
-  element('planner-limits').textContent = areaContext
+  get('area-context').hidden = !areaContext;
+  get('reach-label').hidden = !areaContext;
+  get('population').disabled = !!areaContext;
+  get('scenario').querySelector('option[value=crowd]').disabled = !!areaContext;
+  get('repair-unit').textContent = areaContext ? 'Additional locations' : 'Additional users';
+  get('relay-unit').textContent = areaContext ? ' (km)' : '';
+  get('relay-range').min = areaContext ? '0.1' : '25';
+  get('relay-range').max = areaContext ? '100' : '300';
+  get('relay-range').step = areaContext ? '0.1' : '1';
+  get('planner-limits').textContent = areaContext
     ? 'Assumed reach in km, ignoring terrain and interference. Relay needs power and backhaul. Compare options separately.'
     : 'Simulated reach, not metres. Relay needs power and backhaul. Options use reassignment; repairs and relay use the current extension.';
-  element('point-label').textContent = areaContext ? 'Locations' : 'Users';
-  element('example').textContent =
+  get('point-label').textContent = areaContext ? 'Locations' : 'Users';
+  get('example').textContent =
     network.towers.length === 1 ? 'disable tower' : 'disable center tower';
-  element('scenario-legend').textContent = areaContext
+  get('scenario-legend').textContent = areaContext
     ? 'Green: connected. Red ×: disconnected. Blue: newly connected. T: assumed tower. Click an area to focus on it.'
     : 'Green: connected. Red: disconnected. Blue: newly connected. Click an area to focus, or a tower to switch it.';
   if (!areaContext) {
-    element('point-actions').hidden = true;
-    element('inspect-point').hidden = true;
+    get('point-actions').hidden = true;
+    get('inspect-point').hidden = true;
     return;
   }
-  element('population').value = network.users.length;
-  element('move-tower').innerHTML = network.towers
+  get('population').value = network.users.length;
+  get('move-tower').innerHTML = network.towers
     .map((t) => `<option value="${t.id}">${towerName(t.id)}</option>`)
     .join('');
-  element('area-title').textContent = `${areaContext.name} · ${areaContext.period}`;
+  get('area-title').textContent = `${areaContext.name} · ${areaContext.period}`;
   const tests = network.users.reduce((sum, p) => sum + p.record.tests, 0);
   const slow = network.users.filter((p) => p.record.downKbps < 25000);
-  const lostSlow = slow.filter((p) => current.assignments[p.id] < 0).length;
-  element('area-evidence').textContent =
-    `${network.users.length} measured locations, ${tests.toLocaleString()} tests${network.available > 500 ? `; sampled from ${network.available} cells` : ''}. ${slow.length} recorded under 25 Mbps; ${lostSlow} of these are disconnected under the current assumptions.`;
-  element('area-report').href =
+  get('area-evidence').textContent =
+    `${network.users.length} locations · ${tests.toLocaleString()} tests · ${slow.length} below 25 Mbps${network.available > 500 ? ` · sampled from ${network.available} cells` : ''}`;
+  get('area-report').href =
     'data:text/csv;charset=utf-8,' +
     encodeURIComponent(
-      scenarioReport(areaContext, network, operating, current, {
-        layout: element('scenario').value,
+      areaCsv(areaContext, network, working, current, {
+        layout: get('scenario').value,
         simulated_connected: current.connected,
         simulated_out_of_range: current.outOfRange,
         simulated_capacity_blocked: current.congested,
         strategy,
         focus_area: selectedRegion === null ? 'whole' : regionNames[selectedRegion],
-        focus_connected: countFocus(current, focusIds()),
+        focus_connected: countConnected(current, focusIds()),
         focus_locations: focusIds().length,
         before_connected: comparison?.before.connected ?? '',
-        before_focus_connected: comparison ? countFocus(comparison.before, comparison.ids) : '',
-        range_extension_percent: element('boost').value,
-        grid_power_off: element('grid-outage').checked,
-        backup_hours: element('backup-hours').value,
-        elapsed_hours: element('outage-hours').value
+        before_focus_connected: comparison ? countConnected(comparison.before, comparison.ids) : '',
+        range_extension_percent: get('boost').value,
+        grid_power_off: get('grid-outage').checked,
+        backup_hours: get('backup-hours').value,
+        elapsed_hours: get('outage-hours').value
       })
     );
 }
 document.addEventListener('area-scenario', (event) => {
   areaContext = event.detail;
   selectedRegion = selectedPoint = null;
-  element('power-settings').reset();
-  element('planning-settings').reset();
-  element('scenario').value = 'town';
-  element('capacity').value = Math.max(1, Math.ceil(Math.min(500, areaContext.records.length) / 4));
-  element('area-reach').value = 5;
-  element('ranges').checked = false;
-  element('users').checked = true;
+  get('power-settings').reset();
+  get('planning-settings').reset();
+  get('scenario').value = 'town';
+  get('capacity').value = Math.max(1, Math.ceil(Math.min(500, areaContext.records.length) / 4));
+  get('area-reach').value = 5;
+  get('ranges').checked = false;
+  get('users').checked = true;
   strategy = 'none';
-  network = areaScenario(
+  network = makeArea(
     areaContext.records,
     areaContext.bounds,
-    Number(element('capacity').value),
+    Number(get('capacity').value),
     'town',
     5
   );
-  element('relay-range').value = 5;
+  get('relay-range').value = 5;
   render();
 });
-element('area-reach').onchange = updateSettings;
-element('inspect-point').onclick = () => {
+get('area-reach').onchange = updateSettings;
+get('inspect-point').onclick = () => {
   const point = network.users[selectedPoint];
   if (point) document.dispatchEvent(new CustomEvent('inspect-location', { detail: point.record }));
 };
 
-element('place-tower').onclick = () => {
+get('place-tower').onclick = () => {
   const point = network.users[selectedPoint];
-  const tower = network.towers[Number(element('move-tower').value)];
+  const tower = network.towers[Number(get('move-tower').value)];
   if (!point || !tower) return;
   tower.x = point.x;
   tower.y = point.y;
@@ -685,8 +670,8 @@ element('place-tower').onclick = () => {
 
 function showView(view) {
   const scenarios = view === 'scenarios';
-  element('scenarios').hidden = !scenarios;
-  element('measurements').hidden = scenarios;
+  get('scenarios').hidden = !scenarios;
+  get('measurements').hidden = scenarios;
   document
     .querySelectorAll('[data-view]')
     .forEach((link) =>
@@ -713,77 +698,73 @@ document.addEventListener('inspect-location', () => {
 document.querySelectorAll('[data-layout]').forEach((button) => {
   button.onclick = () => {
     const layout = button.dataset.layout;
-    element('scenario').value = layout;
-    element('power-settings').reset();
-    element('planning-settings').reset();
-    element('boost').value = 35;
-    element('users').checked = true;
-    element('optimization-limit').value = 35;
+    get('scenario').value = layout;
+    get('power-settings').reset();
+    get('planning-settings').reset();
+    get('boost').value = 35;
+    get('users').checked = true;
+    get('optimization-limit').value = 35;
     selectedRegion = selectedPoint = null;
     strategy = 'none';
     if (areaContext) {
-      element('capacity').value =
+      get('capacity').value =
         layout === 'single'
           ? Math.min(200, areaContext.records.length)
           : Math.ceil(Math.min(500, areaContext.records.length) / 4);
-      network = areaScenario(
+      network = makeArea(
         areaContext.records,
         areaContext.bounds,
-        Number(element('capacity').value),
+        Number(get('capacity').value),
         layout,
-        Number(element('area-reach').value)
+        Number(get('area-reach').value)
       );
-      element('relay-range').value = 5;
+      get('relay-range').value = 5;
     } else {
-      element('population').value = layout === 'single' ? 80 : 180;
-      element('capacity').value = layout === 'single' ? 100 : 40;
-      network = makeNetwork(
-        layout,
-        Number(element('population').value),
-        Number(element('capacity').value)
-      );
+      get('population').value = layout === 'single' ? 80 : 180;
+      get('capacity').value = layout === 'single' ? 100 : 40;
+      network = makeNetwork(layout, Number(get('population').value), Number(get('capacity').value));
     }
     render();
   };
 });
 function showChanges(message) {
   const ids = comparison.ids;
-  const before = countFocus(comparison.before, ids);
-  const after = countFocus(current, ids);
+  const before = countConnected(comparison.before, ids);
+  const after = countConnected(current, ids);
   const noun = areaContext ? 'locations' : 'users';
   const rest = network.users.length - ids.length;
-  element('optimization-summary').textContent =
+  get('optimization-summary').textContent =
     message ||
-    `${after - before >= 0 ? '+' : ''}${after - before} ${noun} connected in ${selectedRegion === null ? 'the whole area' : 'the selected area'}. ${ids.length - after} still disconnected.`;
-  element('area-changes').innerHTML =
+    `${after - before >= 0 ? '+' : ''}${after - before} ${noun} connected ${selectedRegion === null ? 'overall' : 'here'}. ${ids.length - after} disconnected.`;
+  get('area-changes').innerHTML =
     `<tr><td>${selectedRegion === null ? 'Whole area' : regionNames[selectedRegion]}</td><td>${before}/${ids.length}</td><td>${after}/${ids.length}</td></tr>` +
     (selectedRegion !== null
       ? `<tr><td>Other areas</td><td>${comparison.before.connected - before}/${rest}</td><td>${current.connected - after}/${rest}</td></tr><tr><td>Total</td><td>${comparison.before.connected}/${network.users.length}</td><td>${current.connected}/${network.users.length}</td></tr>`
       : '');
   const lostElsewhere = comparison.before.connected - before - (current.connected - after);
   if (selectedRegion !== null && lostElsewhere > 0)
-    element('optimization-summary').textContent +=
+    get('optimization-summary').textContent +=
       ` Other areas lose ${lostElsewhere} connections. Total: ${current.connected}/${network.users.length}.`;
-  element('before-after').hidden = false;
-  element('show-before').setAttribute('aria-pressed', viewBefore);
-  element('show-after').setAttribute('aria-pressed', !viewBefore);
-  element('comparison-caption').textContent = viewBefore
-    ? 'Original connections'
-    : `Reassignment + ${element('boost').value}% assumed range increase`;
+  get('before-after').hidden = false;
+  get('show-before').setAttribute('aria-pressed', viewBefore);
+  get('show-after').setAttribute('aria-pressed', !viewBefore);
+  get('comparison-caption').textContent = viewBefore
+    ? 'Original'
+    : `Range +${get('boost').value}% (assumed)`;
   drawMap();
 }
 
 function suggestNextStep() {
   const ids = focusIds();
-  if (countFocus(current, ids) === ids.length) return;
-  const extension = Number(element('boost').value);
-  const repairs = rankRepairs(operating, extension, priorityIds);
+  if (countConnected(current, ids) === ids.length) return;
+  const extension = Number(get('boost').value);
+  const repairs = rankRepairs(working, extension, priorityIds);
   const relay = network.towers.some((t) => t.temporary)
     ? null
-    : planRelay(
-        operating,
-        Number(element('relay-capacity').value),
-        Number(element('relay-range').value) * (areaContext ? network.geography.pixelsPerKm : 1),
+    : findRelay(
+        working,
+        Number(get('relay-capacity').value),
+        Number(get('relay-range').value) * (areaContext ? network.geography.pixelsPerKm : 1),
         extension,
         priorityIds
       );
@@ -792,64 +773,62 @@ function suggestNextStep() {
   const gain = (option) => (selectedRegion === null ? option.gain : option.focusGain);
   options.sort((a, b) => gain(b) - gain(a) || b.gain - a.gain || (a.kind === 'repair' ? -1 : 1));
   nextStep = options.find((option) => gain(option) > 0) || null;
-  element('next-step').hidden = !nextStep;
+  get('next-step').hidden = !nextStep;
   if (!nextStep) {
-    element('optimization-summary').textContent +=
+    get('optimization-summary').textContent +=
       ' No tested repair or relay improves this focus. Check assumptions below.';
     return;
   }
-  element('next-step-note').textContent =
-    `Next option: ${nextStep.kind === 'repair' ? 'repair ' + towerName(nextStep.towerId) : 'add one powered relay'}. +${gain(nextStep)} connections ${selectedRegion === null ? 'in total' : 'in this area; +' + nextStep.gain + ' in total'}. Simulated preview.`;
-  element('try-next-step').hidden = false;
-  element('undo-next-step').hidden = true;
+  const action =
+    nextStep.kind === 'repair' ? 'Repair ' + towerName(nextStep.towerId) : 'Add a relay';
+  get('next-step-note').textContent =
+    `${action}: +${gain(nextStep)} connections ${selectedRegion === null ? 'overall' : 'here; +' + nextStep.gain + ' overall'}.`;
+  get('try-next-step').hidden = false;
+  get('undo-next-step').hidden = true;
   if (nextStep.kind === 'relay') {
     plan = { relay: nextStep };
     drawMap();
   }
 }
 
-element('optimize').onclick = () => {
-  if (!element('optimization-limit').reportValidity()) {
-    element('advanced').open = element('manual-recovery').open = true;
+get('optimize').onclick = () => {
+  if (!get('optimization-limit').reportValidity()) {
+    get('advanced').open = get('manual-recovery').open = true;
     return;
   }
   // Always compare with the same nearest-first baseline for these assumptions.
-  const before = assignUsers(operating);
+  const before = connectUsers(working);
   const ids = focusIds();
   priorityIds = selectedRegion === null ? [] : ids;
-  const choice = optimizeConnections(
-    operating,
-    Number(element('optimization-limit').value),
-    priorityIds
-  );
+  const choice = improveConnections(working, Number(get('optimization-limit').value), priorityIds);
   comparison = {
     before,
     ids,
-    network: { ...operating, towers: operating.towers.map((t) => ({ ...t })) }
+    network: { ...working, towers: working.towers.map((t) => ({ ...t })) }
   };
   nextStep = null;
   previewNetwork = null;
   viewBefore = false;
-  element('boost').value = choice.extension;
+  get('boost').value = choice.extension;
   strategy = 'combined';
   render({ keepComparison: true });
   showChanges();
   suggestNextStep();
 };
-element('whole-area').onclick = () => {
+get('whole-area').onclick = () => {
   selectedRegion = selectedPoint = null;
   strategy = 'none';
   render();
 };
-element('show-before').onclick = () => {
+get('show-before').onclick = () => {
   viewBefore = true;
   showChanges();
 };
-element('show-after').onclick = () => {
+get('show-after').onclick = () => {
   viewBefore = false;
   showChanges();
 };
-element('try-next-step').onclick = () => {
+get('try-next-step').onclick = () => {
   if (!nextStep) return;
   previewNetwork = network;
   network =
@@ -862,7 +841,7 @@ element('try-next-step').onclick = () => {
               ? {
                   ...t,
                   active: true,
-                  powerRestored: element('grid-outage').checked
+                  powerRestored: get('grid-outage').checked
                 }
               : { ...t }
           )
@@ -870,12 +849,12 @@ element('try-next-step').onclick = () => {
   viewBefore = false;
   render({ keepComparison: true });
   showChanges();
-  element('try-next-step').hidden = true;
-  element('undo-next-step').hidden = false;
-  element('next-step-note').textContent =
-    `Preview: ${nextStep.kind === 'relay' ? 'one powered relay added' : towerName(nextStep.towerId) + ' repaired'}. Compare before and after, or undo.`;
+  get('try-next-step').hidden = true;
+  get('undo-next-step').hidden = false;
+  get('next-step-note').textContent =
+    `Preview: ${nextStep.kind === 'relay' ? 'one powered relay added' : towerName(nextStep.towerId) + ' repaired'}. Use undo to remove it.`;
 };
-element('undo-next-step').onclick = () => {
+get('undo-next-step').onclick = () => {
   if (!previewNetwork) return;
   network = previewNetwork;
   previewNetwork = null;
@@ -883,10 +862,10 @@ element('undo-next-step').onclick = () => {
   showChanges();
   suggestNextStep();
 };
-element('optimization-limit').onchange = () => {
+get('optimization-limit').onchange = () => {
   comparison = null;
-  element('before-after').hidden = true;
-  element('next-step').hidden = true;
+  get('before-after').hidden = true;
+  get('next-step').hidden = true;
   nextStep = null;
-  element('optimization-summary').textContent = 'Range limit changed. Click improve again.';
+  get('optimization-summary').textContent = 'Range limit changed. Click improve again.';
 };

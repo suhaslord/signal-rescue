@@ -1,14 +1,13 @@
-# signal rescue
+# Signal Rescue
 
-mobile measurements and a connection planner, inspired by rural connectivity in india.
+[Open the app](https://signal-rescue-suhasaug2011-2968s-projects.vercel.app/)
 
-[open app](https://signal-rescue-suhasaug2011-2968s-projects.vercel.app/)
+Explore mobile speed tests, then try a tower layout for the same area. Click improve to compare connections. You can focus on one area and try a repair or relay.
 
-pick a place on the map and click “improve connections here”. choose an area, then improve it. compare before and after, including what changes elsewhere. if connections are still missing, preview a repair or relay. layouts work without a measured area too.
+Towers, range and capacity are assumptions. This doesn't change real networks or predict speeds. [Data notes](DATA.md).
 
-[measurement source and limits](DATA.md). measured points aren't population. towers, capacity and range are assumptions. the model doesn't change real networks or predict speeds.
+`map.js` reads measurements, `model.js` tests connections, and `app.js` runs the page.
 
-Codex helped write and revise the implementation. Suhas chose the direction and reviewed the app.
+Run: `vercel dev` (install requirements.txt for the data service). Test: `npm test`.
 
-run: `vercel dev` (Python dependencies in requirements.txt)  
-test: `npm test`
+Codex wrote and revised the code. I chose the direction and reviewed the app.

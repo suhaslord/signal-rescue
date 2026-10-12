@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test model.test.js measurement.test.js area-scenario.test.js"
+    "test": "node --test model.test.js data.test.js area.test.js"
   }
 }

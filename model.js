@@ -64,7 +64,7 @@ function towerChoices(network, multiplier) {
   });
 }
 
-export function assignUsers(network, { balanced = false, multiplier = 1, priorityIds = [] } = {}) {
+export function connectUsers(network, { balanced = false, multiplier = 1, priorityIds = [] } = {}) {
   const choices = towerChoices(network, multiplier);
   // User and tower IDs are array indexes; -1 means no connection.
   const assignments = network.users.map(() => -1);
@@ -127,13 +127,13 @@ export function assignUsers(network, { balanced = false, multiplier = 1, priorit
   };
 }
 
-export function recoverNetwork(network, strategy, extension = 35, priorityIds = []) {
+export function recover(network, strategy, extension = 35, priorityIds = []) {
   const multiplier = 1 + extension / 100;
-  if (strategy === 'balanced') return assignUsers(network, { balanced: true, priorityIds });
-  if (strategy === 'boost') return assignUsers(network, { multiplier });
+  if (strategy === 'balanced') return connectUsers(network, { balanced: true, priorityIds });
+  if (strategy === 'boost') return connectUsers(network, { multiplier });
   if (strategy === 'combined')
-    return assignUsers(network, { balanced: true, multiplier, priorityIds });
-  return assignUsers(network);
+    return connectUsers(network, { balanced: true, multiplier, priorityIds });
+  return connectUsers(network);
 }
 
 export function resultsCsv(network, extension = 35, priorityIds = []) {
@@ -141,7 +141,7 @@ export function resultsCsv(network, extension = 35, priorityIds = []) {
     ['strategy', 'connected', 'users', 'out_of_range', 'capacity_blocked', 'range_multiplier']
   ];
   for (const strategy of ['none', 'balanced', 'boost', 'combined']) {
-    const result = recoverNetwork(network, strategy, extension, priorityIds);
+    const result = recover(network, strategy, extension, priorityIds);
     rows.push([
       strategy,
       result.connected,
@@ -156,7 +156,7 @@ export function resultsCsv(network, extension = 35, priorityIds = []) {
 
 // Compare one repair at a time against the same optimized outage.
 export function rankRepairs(network, extension = 35, priorityIds = []) {
-  const baseline = recoverNetwork(network, 'combined', extension, priorityIds);
+  const baseline = recover(network, 'combined', extension, priorityIds);
   return network.towers
     .filter((tower) => !tower.active)
     .map((tower) => {
@@ -167,12 +167,12 @@ export function rankRepairs(network, extension = 35, priorityIds = []) {
           active: candidate.active || candidate.id === tower.id
         }))
       };
-      const result = recoverNetwork(repaired, 'combined', extension, priorityIds);
+      const result = recover(repaired, 'combined', extension, priorityIds);
       return {
         towerId: tower.id,
         connected: result.connected,
         gain: result.connected - baseline.connected,
-        focusGain: countFocus(result, priorityIds) - countFocus(baseline, priorityIds)
+        focusGain: countConnected(result, priorityIds) - countConnected(baseline, priorityIds)
       };
     })
     .sort((a, b) => b.focusGain - a.focusGain || b.gain - a.gain || a.towerId - b.towerId);
@@ -181,13 +181,13 @@ export function rankRepairs(network, extension = 35, priorityIds = []) {
 export function rangeSweep(network, priorityIds = []) {
   return Array.from({ length: 21 }, (_, step) => {
     const extension = step * 5;
-    const result = recoverNetwork(network, 'combined', extension, priorityIds);
+    const result = recover(network, 'combined', extension, priorityIds);
     return {
       extension,
       connected: result.connected,
       outOfRange: result.outOfRange,
       congested: result.congested,
-      focusConnected: countFocus(result, priorityIds)
+      focusConnected: countConnected(result, priorityIds)
     };
   });
 }
@@ -226,21 +226,21 @@ export function powerTimeline(
     return {
       hours,
       active: working.towers.filter((tower) => tower.active).length,
-      connected: recoverNetwork(working, strategy, extension, priorityIds).connected
+      connected: recover(working, strategy, extension, priorityIds).connected
     };
   });
 }
 
-export function planRelay(network, capacity = 30, range = 135, extension = 35, priorityIds = []) {
-  const baseline = recoverNetwork(network, 'combined', extension, priorityIds);
+export function findRelay(network, capacity = 30, range = 135, extension = 35, priorityIds = []) {
+  const baseline = recover(network, 'combined', extension, priorityIds);
   const disconnected = network.users.filter((user) => baseline.assignments[user.id] < 0);
   let best = null;
   // Search a fixed 50-unit grid, not a claim of an exact geographic optimum.
   for (let y = 20; y <= 420; y += 50) {
     for (let x = 25; x <= 775; x += 50) {
       const relay = { x, y, capacity, range };
-      const result = recoverNetwork(withRelay(network, relay), 'combined', extension, priorityIds);
-      const focusConnected = countFocus(result, priorityIds);
+      const result = recover(withRelay(network, relay), 'combined', extension, priorityIds);
+      const focusConnected = countConnected(result, priorityIds);
       const separation = disconnected.reduce((sum, user) => sum + distance(user, relay), 0);
       // Equal coverage: prefer proximity to users who lost service.
       if (
@@ -257,7 +257,7 @@ export function planRelay(network, capacity = 30, range = 135, extension = 35, p
           connected: result.connected,
           gain: result.connected - baseline.connected,
           focusConnected,
-          focusGain: focusConnected - countFocus(baseline, priorityIds)
+          focusGain: focusConnected - countConnected(baseline, priorityIds)
         };
       }
     }
@@ -265,7 +265,7 @@ export function planRelay(network, capacity = 30, range = 135, extension = 35, p
   return best;
 }
 
-export function planningCsv(repairs, sweep, relay, extension = 35) {
+export function planCsv(repairs, sweep, relay, extension = 35) {
   const rows = [
     [
       'action',
@@ -305,12 +305,12 @@ export function planningCsv(repairs, sweep, relay, extension = 35) {
 }
 
 // Within the allowed range increase, prefer the least extension with best connectivity.
-export function countFocus(result, ids) {
+export function countConnected(result, ids) {
   return [...new Set(ids)].filter((id) => result.assignments[id] >= 0).length;
 }
 
-export function optimizeConnections(network, maximumExtension = 35, priorityIds = []) {
-  const limit = Math.max(0, Math.min(100, Number(maximumExtension) || 0));
+export function improveConnections(network, maxRange = 35, priorityIds = []) {
+  const limit = Math.max(0, Math.min(100, Number(maxRange) || 0));
   const candidates = rangeSweep(network, priorityIds).filter((point) => point.extension <= limit);
   const best = candidates.reduce((a, b) =>
     b.focusConnected > a.focusConnected ||
@@ -320,7 +320,7 @@ export function optimizeConnections(network, maximumExtension = 35, priorityIds 
   );
   return {
     ...best,
-    result: recoverNetwork(network, 'combined', best.extension, priorityIds),
-    before: assignUsers(network).connected
+    result: recover(network, 'combined', best.extension, priorityIds),
+    before: connectUsers(network).connected
   };
 }

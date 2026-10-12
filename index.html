@@ -4,7 +4,6 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Signal Rescue</title>
-    <link rel="stylesheet" href="fonts.css" />
     <link rel="stylesheet" href="leaflet.css" />
     <link rel="stylesheet" href="style.css" />
   </head>
@@ -92,7 +91,7 @@
           <p id="measurement-comparison"></p>
         </details>
         <details>
-          <summary>where the numbers come from</summary>
+          <summary>data source</summary>
           <p class="legend">
             <a href="https://github.com/teamookla/ookla-open-data">Speedtest by Ookla</a>,
             <span id="measurement-periods"></span>.
@@ -108,26 +107,23 @@
       </section>
       <section id="scenarios" hidden>
         <h2>Improve connections</h2>
-        <p class="legend">
-          Pick a layout or bring an area from the map. Click an area to focus on it.
-        </p>
+        <p class="legend">Choose a layout. Click an area, then improve it.</p>
         <div id="scenario-choices" aria-label="Choose a scenario">
           <button type="button" data-layout="town">town</button>
           <button type="button" data-layout="rural">rural</button>
           <button type="button" data-layout="single">single tower</button>
           <button type="button" data-layout="crowd">crowded</button>
         </div>
-        <p id="scenario-caption" class="legend"></p>
         <section id="area-context" hidden>
           <h2 id="area-title"></h2>
           <p id="area-evidence"></p>
           <p class="legend">
-            Each point is a measured location, not a person. Towers, reach and slots below are
-            assumptions. This tests connectivity, not future speeds.
+            Points are measured locations, not people. Towers are assumed; results are simulated
+            connections, not speeds.
           </p>
           <p>
-            <a href="#measurements">back to measurements</a> ·
-            <a id="area-report" download="area-scenario.csv">download evidence + scenario</a>
+            <a href="#measurements">back to map</a> ·
+            <a id="area-report" download="area-scenario.csv">download results</a>
           </p>
         </section>
         <section id="network">
@@ -137,7 +133,7 @@
                 <button id="optimize" type="button">improve connections</button>
                 <button id="whole-area" type="button" hidden>whole area</button>
                 <details class="display-options">
-                  <summary>Display options</summary>
+                  <summary>show on map</summary>
                   <label><input id="links" type="checkbox" /> connections</label>
                   <label><input id="ranges" type="checkbox" /> ranges</label>
                   <label><input id="users" type="checkbox" checked /> individual users</label>
@@ -185,14 +181,12 @@
         </section>
         <div id="next-step" hidden>
           <p id="next-step-note"></p>
-          <button id="try-next-step" type="button">preview this change</button
-          ><button id="undo-next-step" type="button" hidden>undo preview</button>
-          <p class="legend">
-            Hardware preview assumes power and backhaul. No equipment is changed.
-          </p>
+          <button id="try-next-step" type="button">try this</button
+          ><button id="undo-next-step" type="button" hidden>undo</button>
+          <p class="legend">Preview only. A relay needs power and backhaul.</p>
         </div>
         <details id="advanced">
-          <summary>assumptions &amp; detailed results</summary>
+          <summary>settings &amp; results</summary>
           <p>
             <button id="example">disable center tower</button>
             <button id="restore">restore all</button>
@@ -436,6 +430,6 @@
     </main>
     <script type="module" src="app.js"></script>
     <script src="leaflet.js"></script>
-    <script type="module" src="measurements.js"></script>
+    <script type="module" src="map.js"></script>
   </body>
 </html>
